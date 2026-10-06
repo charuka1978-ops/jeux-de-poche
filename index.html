@@ -126,6 +126,52 @@ button:focus-visible { outline: 2px solid var(--accent); outline-offset: 3px; }
   .hint { display: none; }
 }
 @media (prefers-reduced-motion: reduce) { .overlay .blink { animation: none; } }
+
+/* --- Classement --- */
+.lb-overlay {
+  position: fixed; inset: 0; z-index: 20;
+  background: var(--shell);
+  display: flex; flex-direction: column;
+  padding: 16px; gap: 10px;
+  overflow-y: auto; overscroll-behavior: contain;
+}
+.lb-title { font-family: var(--f-lcd); font-size: 38px; text-align: center; color: var(--accent); margin: 0; }
+.lb-game-sel { display: flex; flex-wrap: wrap; gap: 6px; justify-content: center; }
+.lb-game-sel button {
+  font-family: var(--f-ui); font-size: 11px; font-weight: 700; letter-spacing: .1em; text-transform: uppercase;
+  background: var(--btn); color: var(--label); border: 0; border-radius: 6px; padding: 6px 10px; cursor: pointer;
+}
+.lb-game-sel button[aria-pressed="true"] { background: var(--accent); color: var(--shell); }
+.lb-table { width: 100%; font-family: var(--f-lcd); font-size: 22px; border-collapse: collapse; }
+.lb-table td { padding: 6px 8px; border-bottom: 1px solid var(--btn); }
+.lb-table .lb-rank { color: var(--accent); width: 2.2em; }
+.lb-table .lb-score { text-align: right; }
+.lb-empty { text-align: center; opacity: .6; padding: 24px 0; font-family: var(--f-lcd); font-size: 22px; }
+.lb-msg { font-size: 12px; text-align: center; opacity: .55; margin: 0; }
+
+/* --- Saisie pseudo --- */
+.pseudo-dialog {
+  position: fixed; inset: 0; z-index: 30;
+  background: rgba(35,48,42,.92);
+  display: flex; align-items: center; justify-content: center;
+  padding: 24px;
+}
+.pseudo-box {
+  background: var(--shell-hi); border-radius: 16px;
+  padding: 24px 20px;
+  display: flex; flex-direction: column; gap: 14px; align-items: center;
+  width: 100%; max-width: 300px; text-align: center;
+}
+.pseudo-box h2 { font-family: var(--f-lcd); font-size: 38px; color: var(--accent); margin: 0; }
+.pseudo-box p { margin: 0; font-size: 14px; opacity: .85; }
+.pseudo-input {
+  background: var(--btn); color: var(--label);
+  border: 2px solid var(--lcd-dark); border-radius: 8px;
+  padding: 10px 12px; font-family: var(--f-lcd); font-size: 28px;
+  text-align: center; letter-spacing: .1em; text-transform: uppercase;
+  width: 100%;
+}
+.pseudo-input:focus { outline: none; border-color: var(--accent); }
 </style>
 
 <style>*{box-sizing:border-box}body{margin:0}:root{padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}[hidden]{display:none!important}</style>
@@ -177,11 +223,33 @@ button:focus-visible { outline: 2px solid var(--accent); outline-offset: 3px; }
     <div class="side">
       <button class="round" id="play">JOUER</button>
       <button class="pill" id="pause">Pause</button>
+      <button class="pill" id="lbBtn">Classement</button>
     </div>
   </div>
   <p class="hint">Touche, glisse sur l'écran ou utilise la croix : chaque jeu explique ses commandes au départ.</p>
   <p class="credit">by John D</p>
 </main>
+
+<!-- Classement global -->
+<div class="lb-overlay" id="lbOverlay" hidden>
+  <p class="lb-title">CLASSEMENT</p>
+  <div class="lb-game-sel" id="lbGameSel"></div>
+  <table class="lb-table"><tbody id="lbBody"></tbody></table>
+  <p class="lb-msg" id="lbMsg"></p>
+  <button class="round" id="lbClose" style="align-self:center;margin-top:auto">FERMER</button>
+</div>
+
+<!-- Saisie pseudo après nouveau record -->
+<div class="pseudo-dialog" id="pseudoDialog" hidden>
+  <div class="pseudo-box">
+    <h2>RECORD !</h2>
+    <p id="pseudoScore"></p>
+    <input class="pseudo-input" id="pseudoInput" type="text" maxlength="10" placeholder="TON PSEUDO"
+           autocomplete="off" spellcheck="false" autocapitalize="characters">
+    <button class="round" id="pseudoSubmit">OK</button>
+    <button class="pill" id="pseudoSkip">Passer</button>
+  </div>
+</div>
 
 <script>
 (() => {
@@ -199,6 +267,33 @@ button:focus-visible { outline: 2px solid var(--accent); outline-offset: 3px; }
     set(k, v) { try { localStorage.setItem(k, v); } catch (e) {} }
   };
   function buzz(p) { try { navigator.vibrate && navigator.vibrate(p); } catch (e) {} }
+
+  /* ---------- Classement Supabase ---------- */
+  // Remplis ces deux valeurs après avoir créé ton projet Supabase (voir README)
+  const SB_URL = '';   // ex: https://xyzxyz.supabase.co
+  const SB_KEY = '';   // clé anon publique
+
+  const sbReady = () => SB_URL && SB_KEY;
+  const sbHeaders = () => ({ apikey: SB_KEY, Authorization: `Bearer ${SB_KEY}`, 'Content-Type': 'application/json' });
+
+  async function lbFetch(game) {
+    if (!sbReady()) return [];
+    try {
+      const r = await fetch(`${SB_URL}/rest/v1/scores?game=eq.${encodeURIComponent(game)}&order=score.desc&limit=10`, { headers: sbHeaders() });
+      return r.ok ? r.json() : [];
+    } catch { return []; }
+  }
+
+  async function lbSubmit(game, pseudo, score) {
+    if (!sbReady()) return;
+    try {
+      await fetch(`${SB_URL}/rest/v1/scores`, {
+        method: 'POST',
+        headers: { ...sbHeaders(), Prefer: 'return=minimal' },
+        body: JSON.stringify({ game, pseudo: pseudo.toUpperCase().slice(0, 10), score })
+      });
+    } catch {}
+  }
 
   /* ---------- Jeu 1 : Serpent ---------- */
   function Snake() {
@@ -1806,6 +1901,70 @@ button:focus-visible { outline: 2px solid var(--accent); outline-offset: 3px; }
     const title = r === 'win' ? 'BRAVO' : r === 'done' ? G.endTitle : 'PERDU';
     const label = G.unit ? 'Distance : ' : 'Score : ';
     show(title, label + G.score + u + (rec ? ' · nouveau record !' : ' · Record : ' + bests[G.key] + u), 'Touche JOUER');
+    if (rec && sbReady()) showPseudoDialog(G.key.replace('-best', ''), G.score, u);
+  }
+
+  function showPseudoDialog(game, score, unit) {
+    $('pseudoScore').textContent = (unit ? 'Distance : ' : 'Score : ') + score + unit;
+    $('pseudoInput').value = store.get('last-pseudo', '');
+    $('pseudoDialog').hidden = false;
+    setTimeout(() => $('pseudoInput').focus(), 50);
+    const close = () => { $('pseudoDialog').hidden = true; };
+    const submit = async () => {
+      const p = $('pseudoInput').value.trim();
+      if (!p) { $('pseudoInput').focus(); return; }
+      store.set('last-pseudo', p);
+      close();
+      await lbSubmit(game, p, score);
+    };
+    $('pseudoSubmit').onclick = submit;
+    $('pseudoSkip').onclick = close;
+    $('pseudoInput').onkeydown = e => { if (e.key === 'Enter') submit(); if (e.key === 'Escape') close(); };
+  }
+
+  async function showLeaderboard() {
+    if (state === 'run') pause();
+    $('lbOverlay').hidden = false;
+    const sel = $('lbGameSel');
+    sel.innerHTML = '';
+    const gameKeys = Object.keys(games);
+    let activeGame = current;
+    gameKeys.forEach(key => {
+      const b = document.createElement('button');
+      b.textContent = games[key].title;
+      b.setAttribute('aria-pressed', String(key === activeGame));
+      b.onclick = () => {
+        sel.querySelectorAll('button').forEach(x => x.setAttribute('aria-pressed', 'false'));
+        b.setAttribute('aria-pressed', 'true');
+        activeGame = key;
+        loadLbTable(key, games[key].unit);
+      };
+      sel.appendChild(b);
+    });
+    loadLbTable(activeGame, games[activeGame].unit);
+  }
+
+  async function loadLbTable(game, unit) {
+    const body = $('lbBody'), msg = $('lbMsg');
+    body.innerHTML = '';
+    msg.textContent = '';
+    if (!sbReady()) {
+      body.innerHTML = `<tr><td class="lb-empty" colspan="3">Configure Supabase pour activer le classement en ligne.</td></tr>`;
+      return;
+    }
+    body.innerHTML = `<tr><td class="lb-empty" colspan="3">Chargement…</td></tr>`;
+    const rows = await lbFetch(game);
+    if (!rows.length) {
+      body.innerHTML = `<tr><td class="lb-empty" colspan="3">Aucun score pour l'instant — sois le premier !</td></tr>`;
+      return;
+    }
+    const u = unit || '';
+    body.innerHTML = rows.map((r, i) => `<tr>
+      <td class="lb-rank">${i + 1}</td>
+      <td>${r.pseudo}</td>
+      <td class="lb-score">${r.score}${u}</td>
+    </tr>`).join('');
+    msg.textContent = 'Top 10 mondial';
   }
   function select(name) {
     current = name; G = games[name]; store.set('console-jeu', name);
@@ -1893,6 +2052,9 @@ button:focus-visible { outline: 2px solid var(--accent); outline-offset: 3px; }
   });
   stage.addEventListener('pointercancel', () => tracking = false);
   document.addEventListener('touchmove', e => { if (e.target.closest('.stage, .dpad')) e.preventDefault(); }, {passive: false});
+
+  $('lbBtn').addEventListener('click', showLeaderboard);
+  $('lbClose').addEventListener('click', () => { $('lbOverlay').hidden = true; });
 
   select(current);
 })();
