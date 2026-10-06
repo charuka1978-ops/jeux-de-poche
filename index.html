@@ -1893,10 +1893,11 @@ button:focus-visible { outline: 2px solid var(--accent); outline-offset: 3px; }
     const title = r === 'win' ? 'BRAVO' : r === 'done' ? G.endTitle : 'PERDU';
     const label = G.unit ? 'Distance : ' : 'Score : ';
     show(title, label + G.score + u + (rec ? ' · nouveau record !' : ' · Record : ' + bests[G.key] + u), 'Touche JOUER');
-    if (rec) showPseudoDialog(G.key.replace('-best', ''), G.score, u);
+    if (G.score > 0) showPseudoDialog(G.key.replace('-best', ''), G.score, u, rec);
   }
 
-  function showPseudoDialog(game, score, unit) {
+  function showPseudoDialog(game, score, unit, isRecord) {
+    $('pseudoDialog').querySelector('h2').textContent = isRecord ? 'RECORD !' : 'TON SCORE';
     $('pseudoScore').textContent = (unit ? 'Distance : ' : 'Score : ') + score + unit;
     $('pseudoInput').value = store.get('last-pseudo', '');
     $('pseudoDialog').hidden = false;
