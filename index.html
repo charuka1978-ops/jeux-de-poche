@@ -246,7 +246,8 @@ button:focus-visible { outline: 2px solid var(--accent); outline-offset: 3px; }
     <p id="pseudoScore"></p>
     <input class="pseudo-input" id="pseudoInput" type="text" maxlength="10" placeholder="TON PSEUDO"
            autocomplete="off" spellcheck="false" autocapitalize="characters">
-    <button class="round" id="pseudoSubmit">OK</button>
+    <p style="font-size:12px;opacity:.7;margin:0">Tu seras redirigé vers GitHub pour valider.</p>
+    <button class="round" id="pseudoSubmit">PUBLIER ↗</button>
     <button class="pill" id="pseudoSkip">Passer</button>
   </div>
 </div>
@@ -268,31 +269,22 @@ button:focus-visible { outline: 2px solid var(--accent); outline-offset: 3px; }
   };
   function buzz(p) { try { navigator.vibrate && navigator.vibrate(p); } catch (e) {} }
 
-  /* ---------- Classement Supabase ---------- */
-  // Remplis ces deux valeurs après avoir créé ton projet Supabase (voir README)
-  const SB_URL = '';   // ex: https://xyzxyz.supabase.co
-  const SB_KEY = '';   // clé anon publique
-
-  const sbReady = () => SB_URL && SB_KEY;
-  const sbHeaders = () => ({ apikey: SB_KEY, Authorization: `Bearer ${SB_KEY}`, 'Content-Type': 'application/json' });
+  /* ---------- Classement GitHub ---------- */
+  const GH_RAW   = 'https://raw.githubusercontent.com/charuka1978-ops/jeux-de-poche/main/scores.json';
+  const GH_ISSUE = 'https://github.com/charuka1978-ops/jeux-de-poche/issues/new';
 
   async function lbFetch(game) {
-    if (!sbReady()) return [];
     try {
-      const r = await fetch(`${SB_URL}/rest/v1/scores?game=eq.${encodeURIComponent(game)}&order=score.desc&limit=10`, { headers: sbHeaders() });
-      return r.ok ? r.json() : [];
+      const r = await fetch(GH_RAW + '?t=' + Date.now());
+      if (!r.ok) return [];
+      const data = await r.json();
+      return (data[game] || []).slice(0, 10);
     } catch { return []; }
   }
 
-  async function lbSubmit(game, pseudo, score) {
-    if (!sbReady()) return;
-    try {
-      await fetch(`${SB_URL}/rest/v1/scores`, {
-        method: 'POST',
-        headers: { ...sbHeaders(), Prefer: 'return=minimal' },
-        body: JSON.stringify({ game, pseudo: pseudo.toUpperCase().slice(0, 10), score })
-      });
-    } catch {}
+  function lbSubmitUrl(game, pseudo, score) {
+    const title = `SCORE:${game}:${pseudo}:${score}`;
+    return `${GH_ISSUE}?title=${encodeURIComponent(title)}&body=${encodeURIComponent('Soumission automatique depuis Jeux de poche.')}`;
   }
 
   /* ---------- Jeu 1 : Serpent ---------- */
@@ -1901,7 +1893,7 @@ button:focus-visible { outline: 2px solid var(--accent); outline-offset: 3px; }
     const title = r === 'win' ? 'BRAVO' : r === 'done' ? G.endTitle : 'PERDU';
     const label = G.unit ? 'Distance : ' : 'Score : ';
     show(title, label + G.score + u + (rec ? ' · nouveau record !' : ' · Record : ' + bests[G.key] + u), 'Touche JOUER');
-    if (rec && sbReady()) showPseudoDialog(G.key.replace('-best', ''), G.score, u);
+    if (rec) showPseudoDialog(G.key.replace('-best', ''), G.score, u);
   }
 
   function showPseudoDialog(game, score, unit) {
@@ -1910,12 +1902,12 @@ button:focus-visible { outline: 2px solid var(--accent); outline-offset: 3px; }
     $('pseudoDialog').hidden = false;
     setTimeout(() => $('pseudoInput').focus(), 50);
     const close = () => { $('pseudoDialog').hidden = true; };
-    const submit = async () => {
+    const submit = () => {
       const p = $('pseudoInput').value.trim();
       if (!p) { $('pseudoInput').focus(); return; }
       store.set('last-pseudo', p);
       close();
-      await lbSubmit(game, p, score);
+      window.open(lbSubmitUrl(game, p, score), '_blank');
     };
     $('pseudoSubmit').onclick = submit;
     $('pseudoSkip').onclick = close;
@@ -1948,10 +1940,6 @@ button:focus-visible { outline: 2px solid var(--accent); outline-offset: 3px; }
     const body = $('lbBody'), msg = $('lbMsg');
     body.innerHTML = '';
     msg.textContent = '';
-    if (!sbReady()) {
-      body.innerHTML = `<tr><td class="lb-empty" colspan="3">Configure Supabase pour activer le classement en ligne.</td></tr>`;
-      return;
-    }
     body.innerHTML = `<tr><td class="lb-empty" colspan="3">Chargement…</td></tr>`;
     const rows = await lbFetch(game);
     if (!rows.length) {
@@ -1964,7 +1952,7 @@ button:focus-visible { outline: 2px solid var(--accent); outline-offset: 3px; }
       <td>${r.pseudo}</td>
       <td class="lb-score">${r.score}${u}</td>
     </tr>`).join('');
-    msg.textContent = 'Top 10 mondial';
+    msg.textContent = 'Top 10 mondial · scores mis à jour en ~1 min';
   }
   function select(name) {
     current = name; G = games[name]; store.set('console-jeu', name);

@@ -1,0 +1,66 @@
+name: Enregistrer un score
+
+on:
+  issues:
+    types: [opened]
+
+jobs:
+  process:
+    if: startsWith(github.event.issue.title, 'SCORE:')
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      issues: write
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Mettre à jour scores.json
+        run: |
+          python3 - <<'EOF'
+          import json, re, os, sys
+
+          title = os.environ['ISSUE_TITLE']
+          # Format attendu : SCORE:jeu:pseudo:valeur
+          m = re.match(r'^SCORE:(\w{1,20}):([^:]{1,20}):(\d{1,9})$', title.strip())
+          if not m:
+              print("Format invalide, ignoré.")
+              sys.exit(0)
+
+          game   = m.group(1)
+          pseudo = re.sub(r'[^A-Za-z0-9_\- ]', '', m.group(2))[:10].upper().strip()
+          score  = int(m.group(3))
+
+          if not pseudo:
+              sys.exit(0)
+
+          with open('scores.json') as f:
+              data = json.load(f)
+
+          if game not in data:
+              data[game] = []
+
+          data[game].append({'pseudo': pseudo, 'score': score})
+          data[game].sort(key=lambda x: x['score'], reverse=True)
+          data[game] = data[game][:50]   # garder les 50 meilleurs
+
+          with open('scores.json', 'w') as f:
+              json.dump(data, f)
+
+          print(f"Score enregistré : {pseudo} — {game} — {score}")
+          EOF
+        env:
+          ISSUE_TITLE: ${{ github.event.issue.title }}
+
+      - name: Commit
+        run: |
+          git config user.name  "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add scores.json
+          git diff --cached --quiet || git commit -m "Score: ${{ github.event.issue.title }}"
+          git push
+
+      - name: Fermer l'issue
+        run: gh issue close ${{ github.event.issue.number }} --comment "Score enregistré ! 🎮"
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
