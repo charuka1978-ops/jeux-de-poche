@@ -1,0 +1,1902 @@
+<!doctype html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Jeux de poche</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=VT323&family=Rubik:wght@500;700&display=swap">
+<style>
+/* Layout : une console de poche à écran LCD, choix du jeu en haut, écran, croix directionnelle en bas. Look unique (pas de thème clair/sombre). */
+:root {
+  --shell: #23302a;
+  --shell-hi: #2f3f37;
+  --lcd: #b8c79a;
+  --lcd-dark: #8fa070;
+  --pixel: #26331f;
+  --pixel-faint: rgba(38,51,31,.10);
+  --label: #c9d6b4;
+  --btn: #3c4d44;
+  --btn-press: #4c6156;
+  --accent: #e0b04a;
+  --f-lcd: "VT323", ui-monospace, "Courier New", monospace;
+  --f-ui: "Rubik", system-ui, -apple-system, sans-serif;
+  color-scheme: dark;
+}
+html, body { height: 100%; }
+body {
+  background: var(--shell);
+  color: var(--label);
+  font-family: var(--f-ui);
+  display: flex; justify-content: center;
+  padding: 0 16px;
+  overscroll-behavior: none;
+  -webkit-user-select: none; user-select: none;
+  -webkit-tap-highlight-color: transparent;
+}
+.device {
+  width: 100%; max-width: 420px; height: 100%;
+  display: flex; flex-direction: column; gap: 12px;
+  padding-block: 12px 16px;
+}
+.menu { position: relative; }
+.menu-btn {
+  width: 100%; display: flex; align-items: center; gap: 10px;
+  border: 0; border-radius: 12px; padding: 10px 14px; cursor: pointer;
+  background: var(--shell-hi); color: var(--label); font-family: var(--f-ui);
+}
+.menu-btn span:first-child { font-size: 11px; font-weight: 700; letter-spacing: .14em; text-transform: uppercase; opacity: .7; }
+.menu-btn strong { flex: 1; text-align: left; font-size: 15px; color: var(--accent); }
+.menu-btn .caret { transition: transform .15s; }
+.menu-btn[aria-expanded="true"] .caret { transform: rotate(180deg); }
+.menu-list {
+  position: absolute; z-index: 5; left: 0; right: 0; top: calc(100% + 6px);
+  display: flex; flex-direction: column; gap: 2px; padding: 6px;
+  max-height: 72vh; overflow-y: auto; overscroll-behavior: contain;
+  background: var(--shell-hi); border-radius: 12px; box-shadow: 0 10px 24px rgba(0,0,0,.45);
+}
+.tab {
+  display: flex; justify-content: space-between; align-items: baseline; gap: 8px;
+  border: 0; border-radius: 8px; padding: 12px; cursor: pointer; text-align: left;
+  background: transparent; color: var(--label); font-family: var(--f-ui);
+}
+.tab b { font-size: 15px; }
+.tab small { font-size: 12px; opacity: .75; }
+.tab:hover { background: var(--btn); }
+.tab[aria-pressed="true"] { background: var(--accent); color: var(--shell); }
+.tab[aria-pressed="true"] small { opacity: .85; }
+.bezel {
+  background: var(--shell-hi);
+  border-radius: 14px 14px 36px 14px;
+  padding: 12px;
+  box-shadow: inset 0 2px 0 rgba(255,255,255,.04), 0 6px 18px rgba(0,0,0,.35);
+}
+.lcd {
+  background: var(--lcd);
+  border-radius: 4px;
+  padding: 8px;
+  box-shadow: inset 0 0 0 2px var(--lcd-dark), inset 0 4px 12px rgba(0,0,0,.18);
+  font-family: var(--f-lcd); color: var(--pixel);
+}
+.hud { display: flex; justify-content: space-between; font-size: 22px; line-height: 1; padding: 0 2px 6px; font-variant-numeric: tabular-nums; }
+.stage { position: relative; }
+canvas { display: block; width: 100%; aspect-ratio: 1; max-width: 100%; touch-action: none; }
+.overlay {
+  position: absolute; inset: 0;
+  display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 6px;
+  background: rgba(184,199,154,.9);
+  text-align: center; padding: 16px;
+}
+.overlay h1 { font-family: var(--f-lcd); font-weight: 400; font-size: 46px; line-height: .9; margin: 0; }
+.overlay p { margin: 0; font-size: 21px; line-height: 1.1; max-width: 26ch; }
+.overlay .blink { animation: blink 1.1s steps(2, start) infinite; margin-top: 8px; }
+@keyframes blink { to { visibility: hidden; } }
+
+.controls {
+  flex: 1; min-height: 0;
+  display: grid; grid-template-columns: 1fr auto; align-items: center; gap: 16px;
+}
+.dpad { justify-self: start; display: grid; grid-template: repeat(3, 58px) / repeat(3, 58px); }
+.dpad button { background: var(--btn); border: 0; color: var(--label); font-size: 20px; cursor: pointer; touch-action: none; }
+.dpad button:active { background: var(--btn-press); }
+.dpad .u { grid-area: 1/2; border-radius: 10px 10px 0 0; }
+.dpad .l { grid-area: 2/1; border-radius: 10px 0 0 10px; }
+.dpad .c { grid-area: 2/2; background: var(--btn); pointer-events: none; }
+.dpad .r { grid-area: 2/3; border-radius: 0 10px 10px 0; }
+.dpad .d { grid-area: 3/2; border-radius: 0 0 10px 10px; }
+.side { display: flex; flex-direction: column; align-items: center; gap: 14px; }
+.round {
+  width: 72px; height: 72px; border-radius: 50%; border: 0; cursor: pointer;
+  background: var(--accent); color: var(--shell);
+  font-family: var(--f-ui); font-weight: 700; font-size: 14px;
+  box-shadow: 0 4px 0 #9b7a2f;
+}
+.round:active { transform: translateY(3px); box-shadow: 0 1px 0 #9b7a2f; }
+.pill {
+  border: 0; border-radius: 999px; padding: 8px 14px; cursor: pointer;
+  background: var(--btn); color: var(--label);
+  font-family: var(--f-ui); font-size: 11px; font-weight: 700; letter-spacing: .12em; text-transform: uppercase;
+}
+button:focus-visible { outline: 2px solid var(--accent); outline-offset: 3px; }
+.hint { font-size: 12px; text-align: center; opacity: .7; margin: 0; }
+.credit { margin: -6px 0 0; text-align: right; font-size: 11px; font-weight: 700; letter-spacing: .14em; text-transform: uppercase; color: var(--accent); }
+@media (max-height: 660px) {
+  .dpad { grid-template: repeat(3, 48px) / repeat(3, 48px); }
+  .round { width: 60px; height: 60px; }
+  .hint { display: none; }
+}
+@media (prefers-reduced-motion: reduce) { .overlay .blink { animation: none; } }
+</style>
+
+<style>*{box-sizing:border-box}body{margin:0}:root{padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}[hidden]{display:none!important}</style>
+</head>
+<body>
+<main class="device">
+  <div class="menu">
+    <button class="menu-btn" id="menuBtn" aria-expanded="false" aria-controls="menuList">
+      <span>Choisis ton jeu</span><strong id="menuCurrent">Serpent</strong><span class="caret" aria-hidden="true">▾</span>
+    </button>
+    <div class="menu-list" id="menuList" role="group" aria-label="Choix du jeu" hidden>
+      <button class="tab" id="t-serpent" data-game="serpent" aria-pressed="true"><b>Serpent</b><small>Mange les pommes</small></button>
+      <button class="tab" id="t-souris" data-game="souris" aria-pressed="false"><b>Souris</b><small>Labyrinthe et chats</small></button>
+      <button class="tab" id="t-pingouin" data-game="pingouin" aria-pressed="false"><b>Pingouin</b><small>Lancer le plus loin</small></button>
+      <button class="tab" id="t-cible" data-game="cible" aria-pressed="false"><b>Cible</b><small>Vise le centre de la glace</small></button>
+      <button class="tab" id="t-planeur" data-game="planeur" aria-pressed="false"><b>Planeur</b><small>Vole et attrape les poissons</small></button>
+      <button class="tab" id="t-briques" data-game="briques" aria-pressed="false"><b>Briques</b><small>Casse toutes les briques</small></button>
+      <button class="tab" id="t-glacons" data-game="glacons" aria-pressed="false"><b>Glaçons</b><small>Remplis les lignes</small></button>
+      <button class="tab" id="t-memoire" data-game="memoire" aria-pressed="false"><b>Mémoire</b><small>Retrouve les paires</small></button>
+      <button class="tab" id="t-sudoku" data-game="sudoku" aria-pressed="false"><b>Sudoku</b><small>Grille de 1 à 9</small></button>
+      <button class="tab" id="t-morpion" data-game="morpion" aria-pressed="false"><b>Morpion</b><small>Contre la console</small></button>
+      <button class="tab" id="t-sauvetage" data-game="sauvetage" aria-pressed="false"><b>Sauvetage</b><small>Rattrape les pingouins</small></button>
+      <button class="tab" id="t-chat" data-game="chat" aria-pressed="false"><b>Chat perché</b><small>Saute de toit en toit</small></button>
+    </div>
+  </div>
+
+  <div class="bezel">
+    <div class="lcd">
+      <div class="hud"><span id="score">SCORE 000</span><span id="best">RECORD 000</span></div>
+      <div class="stage">
+        <canvas id="game" width="420" height="420" aria-label="Écran de jeu"></canvas>
+        <div class="overlay" id="overlay">
+          <h1 id="ovTitle">SERPENT</h1>
+          <p id="ovText"></p>
+          <p class="blink" id="ovCta">Touche JOUER</p>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="controls">
+    <div class="dpad" aria-label="Croix directionnelle">
+      <button class="u" id="b-up" aria-label="Haut">▲</button>
+      <button class="l" id="b-left" aria-label="Gauche">◀</button>
+      <span class="c"></span>
+      <button class="r" id="b-right" aria-label="Droite">▶</button>
+      <button class="d" id="b-down" aria-label="Bas">▼</button>
+    </div>
+    <div class="side">
+      <button class="round" id="play">JOUER</button>
+      <button class="pill" id="pause">Pause</button>
+    </div>
+  </div>
+  <p class="hint">Touche, glisse sur l'écran ou utilise la croix : chaque jeu explique ses commandes au départ.</p>
+  <p class="credit">by John D</p>
+</main>
+
+<script>
+(() => {
+  const cv = document.getElementById('game');
+  const ctx = cv.getContext('2d');
+  const W = cv.width;
+  const css = getComputedStyle(document.documentElement);
+  const PIX = css.getPropertyValue('--pixel').trim();
+  const LCD = css.getPropertyValue('--lcd').trim();
+  const FAINT = css.getPropertyValue('--pixel-faint').trim();
+  const $ = id => document.getElementById(id);
+  const pad3 = n => String(n).padStart(3, '0');
+  const store = {
+    get(k, d) { try { const v = localStorage.getItem(k); return v === null ? d : v; } catch (e) { return d; } },
+    set(k, v) { try { localStorage.setItem(k, v); } catch (e) {} }
+  };
+  function buzz(p) { try { navigator.vibrate && navigator.vibrate(p); } catch (e) {} }
+
+  /* ---------- Jeu 1 : Serpent ---------- */
+  function Snake() {
+    const N = 20, C = W / N;
+    let snake, dir, queue, food;
+    function placeFood() {
+      const free = [];
+      for (let y = 0; y < N; y++) for (let x = 0; x < N; x++)
+        if (!snake.some(s => s.x === x && s.y === y)) free.push({x, y});
+      food = free[Math.floor(Math.random() * free.length)];
+    }
+    const cell = (x, y, i) => ctx.fillRect(x * C + i, y * C + i, C - i * 2, C - i * 2);
+    const g = {
+      key: 'serpent-best', title: 'SERPENT',
+      intro: 'Mange les pommes, évite les murs et ta propre queue.',
+      score: 0,
+      reset() {
+        snake = [{x: 9, y: 10}, {x: 8, y: 10}, {x: 7, y: 10}];
+        dir = {x: 1, y: 0}; queue = []; g.score = 0; placeFood();
+      },
+      interval() { return Math.max(65, 150 - g.score * 3); },
+      turn(x, y) {
+        const ref = queue.length ? queue[queue.length - 1] : dir;
+        if ((ref.x === -x && ref.y === -y) || (ref.x === x && ref.y === y)) return;
+        if (queue.length < 3) queue.push({x, y});
+      },
+      step() {
+        if (queue.length) dir = queue.shift();
+        const h = {x: snake[0].x + dir.x, y: snake[0].y + dir.y};
+        const eating = food && h.x === food.x && h.y === food.y;
+        const body = eating ? snake : snake.slice(0, -1);
+        if (h.x < 0 || h.y < 0 || h.x >= N || h.y >= N || body.some(s => s.x === h.x && s.y === h.y)) return 'over';
+        snake.unshift(h);
+        if (eating) {
+          g.score++; buzz(15);
+          if (snake.length === N * N) return 'win';
+          placeFood();
+        } else snake.pop();
+      },
+      status() { return 'SCORE ' + pad3(g.score); },
+      draw() {
+        ctx.clearRect(0, 0, W, W);
+        ctx.fillStyle = FAINT;
+        for (let y = 0; y < N; y++) for (let x = 0; x < N; x++) cell(x, y, 1);
+        ctx.fillStyle = PIX;
+        snake.forEach((s, i) => cell(s.x, s.y, i === 0 ? 0.5 : 1.5));
+        const hd = snake[0];
+        ctx.fillStyle = LCD;
+        const ex = hd.x * C + C / 2 + dir.x * C * .18, ey = hd.y * C + C / 2 + dir.y * C * .18;
+        const px = dir.y * C * .2, py = dir.x * C * .2;
+        ctx.fillRect(ex + px - 1.5, ey + py - 1.5, 3, 3);
+        ctx.fillRect(ex - px - 1.5, ey - py - 1.5, 3, 3);
+        if (food) {
+          ctx.fillStyle = PIX;
+          const fx = food.x * C, fy = food.y * C, q = C / 4;
+          ctx.fillRect(fx + q, fy + q * 0.6, q * 2, q * 2.8);
+          ctx.fillRect(fx + q * 0.6, fy + q, q * 2.8, q * 2);
+          ctx.fillRect(fx + q * 1.8, fy, q * 0.5, q * 0.8);
+        }
+      }
+    };
+    return g;
+  }
+
+  /* ---------- Jeu 2 : Souris (labyrinthe) ---------- */
+  function Mouse() {
+    const MAP = [
+      "###############",
+      "#o.....#.....o#",
+      "#.###.#.#.###.#",
+      "#.............#",
+      "#.##.#####.##.#",
+      "#....#...#....#",
+      "####.#.#.#.####",
+      "#.............#",
+      "####.#.#.#.####",
+      "#....#...#....#",
+      "#.##.#####.##.#",
+      "#.............#",
+      "#.###.#.#.###.#",
+      "#o.....#.....o#",
+      "###############"
+    ];
+    const N = 15, C = W / N;
+    const DIRS = [{x: 1, y: 0}, {x: -1, y: 0}, {x: 0, y: 1}, {x: 0, y: -1}];
+    let grid, left, mouse, prev, mdir, want, cats, lives, sleep, level, tick, grace;
+    const open = (x, y) => x >= 0 && y >= 0 && x < N && y < N && grid[y][x] !== '#';
+
+    function positions() {
+      mouse = {x: 7, y: 11}; prev = {...mouse}; mdir = {x: 0, y: 0}; want = null;
+      cats = [
+        {x: 6, y: 7, d: {x: -1, y: 0}},
+        {x: 7, y: 7, d: {x: 0, y: -1}},
+        {x: 8, y: 7, d: {x: 1, y: 0}}
+      ];
+      sleep = 0; grace = 8;
+    }
+    function newLevel() {
+      grid = MAP.map(r => r.split(''));
+      grid[11][7] = ' ';
+      left = 0;
+      grid.forEach(r => r.forEach(c => { if (c === '.' || c === 'o') left++; }));
+      positions();
+    }
+    function moveCat(c) {
+      let opts = DIRS.filter(d => !(d.x === -c.d.x && d.y === -c.d.y) && open(c.x + d.x, c.y + d.y));
+      if (!opts.length) opts = [{x: -c.d.x, y: -c.d.y}];
+      let pick;
+      if (Math.random() < 0.6 + level * 0.05) {
+        pick = opts.reduce((a, b) =>
+          Math.abs(c.x + a.x - mouse.x) + Math.abs(c.y + a.y - mouse.y) <=
+          Math.abs(c.x + b.x - mouse.x) + Math.abs(c.y + b.y - mouse.y) ? a : b);
+      } else pick = opts[Math.floor(Math.random() * opts.length)];
+      c.old = {x: c.x, y: c.y};
+      c.d = pick; c.x += pick.x; c.y += pick.y;
+    }
+    function caught() {
+      if (sleep > 0) return false;
+      return cats.some(c => (c.x === mouse.x && c.y === mouse.y) ||
+        (c.old && c.old.x === mouse.x && c.old.y === mouse.y && c.x === prev.x && c.y === prev.y));
+    }
+    function lose() {
+      lives--; buzz([80, 50, 80]);
+      if (lives <= 0) return 'over';
+      positions();
+      return 'hit';
+    }
+
+    const g = {
+      key: 'souris-best', title: 'SOURIS',
+      intro: 'Grignote toutes les miettes sans te faire attraper par les chats. Le fromage les endort un moment.',
+      score: 0,
+      reset() { g.score = 0; lives = 3; level = 1; tick = 0; newLevel(); },
+      interval() { return 165; },
+      turn(x, y) { want = {x, y}; },
+      step() {
+        tick++;
+        cats.forEach(c => c.old = null);
+        prev = {...mouse};
+        if (want && open(mouse.x + want.x, mouse.y + want.y)) mdir = want;
+        if (open(mouse.x + mdir.x, mouse.y + mdir.y)) { mouse.x += mdir.x; mouse.y += mdir.y; }
+        const here = grid[mouse.y][mouse.x];
+        if (here === '.') { g.score++; left--; grid[mouse.y][mouse.x] = ' '; }
+        else if (here === 'o') { g.score += 5; left--; grid[mouse.y][mouse.x] = ' '; sleep = 40; buzz(30); }
+        if (caught()) return lose();
+
+        if (sleep > 0) sleep--;
+        else if (grace > 0) grace--;
+        else if (tick % 5 < Math.min(5, 2 + level)) cats.forEach(moveCat);
+        if (caught()) return lose();
+
+        if (left === 0) {
+          g.score += 20; level++; buzz([30, 40, 30]);
+          newLevel();
+          return 'level';
+        }
+      },
+      status() { return 'SCORE ' + pad3(g.score) + ' VIES ' + lives; },
+      draw() {
+        ctx.clearRect(0, 0, W, W);
+        for (let y = 0; y < N; y++) for (let x = 0; x < N; x++) {
+          const c = grid[y][x], px = x * C, py = y * C;
+          if (c === '#') {
+            ctx.fillStyle = PIX;
+            ctx.fillRect(px + 1, py + 1, C - 2, C - 2);
+            ctx.fillStyle = LCD;
+            ctx.fillRect(px + C * .3, py + C * .3, C * .4, C * .4);
+          } else {
+            ctx.fillStyle = FAINT;
+            ctx.fillRect(px + 1, py + 1, C - 2, C - 2);
+            ctx.fillStyle = PIX;
+            if (c === '.') ctx.fillRect(px + C / 2 - 2.5, py + C / 2 - 2.5, 5, 5);
+            if (c === 'o') {        // part de fromage
+              ctx.beginPath();
+              ctx.moveTo(px + C * .18, py + C * .78);
+              ctx.lineTo(px + C * .82, py + C * .78);
+              ctx.lineTo(px + C * .82, py + C * .28);
+              ctx.closePath(); ctx.fill();
+              ctx.fillStyle = FAINT === '' ? LCD : LCD;
+              ctx.beginPath(); ctx.arc(px + C * .64, py + C * .6, C * .07, 0, 7); ctx.fill();
+            }
+          }
+        }
+        // souris
+        const d = (mdir.x || mdir.y) ? mdir : {x: 1, y: 0};
+        const mx = mouse.x * C + C / 2, my = mouse.y * C + C / 2;
+        const nx = -d.y, ny = d.x;     // perpendiculaire
+        ctx.strokeStyle = PIX; ctx.lineWidth = 2;
+        ctx.beginPath();               // queue
+        ctx.moveTo(mx - d.x * C * .25, my - d.y * C * .25);
+        ctx.quadraticCurveTo(mx - d.x * C * .5 + nx * C * .2, my - d.y * C * .5 + ny * C * .2, mx - d.x * C * .55 - nx * C * .1, my - d.y * C * .55 - ny * C * .1);
+        ctx.stroke();
+        ctx.fillStyle = PIX;
+        ctx.beginPath(); ctx.ellipse(mx, my, C * .3, C * .22, Math.atan2(d.y, d.x), 0, 7); ctx.fill();
+        [1, -1].forEach(s => {          // oreilles
+          ctx.beginPath();
+          ctx.arc(mx + d.x * C * .08 + nx * s * C * .2, my + d.y * C * .08 + ny * s * C * .2, C * .12, 0, 7);
+          ctx.fill();
+        });
+        ctx.fillStyle = LCD;
+        ctx.fillRect(mx + d.x * C * .18 - 1.5, my + d.y * C * .18 - 1.5, 3, 3);
+
+        // chats
+        const blinkOff = sleep > 0 && sleep < 10 && tick % 2;
+        cats.forEach(c => {
+          const cx = c.x * C + C / 2, cy = c.y * C + C / 2, h = C * .3;
+          ctx.fillStyle = PIX; ctx.strokeStyle = PIX; ctx.lineWidth = 2;
+          const head = () => {
+            ctx.beginPath();
+            ctx.moveTo(cx - h, cy + h);
+            ctx.lineTo(cx - h, cy - h * 1.2);
+            ctx.lineTo(cx - h * .4, cy - h * .5);
+            ctx.lineTo(cx + h * .4, cy - h * .5);
+            ctx.lineTo(cx + h, cy - h * 1.2);
+            ctx.lineTo(cx + h, cy + h);
+            ctx.closePath();
+          };
+          head();
+          if (sleep > 0 && !blinkOff) {
+            ctx.stroke();
+            ctx.beginPath();            // yeux fermés
+            ctx.moveTo(cx - h * .6, cy); ctx.lineTo(cx - h * .15, cy);
+            ctx.moveTo(cx + h * .15, cy); ctx.lineTo(cx + h * .6, cy);
+            ctx.stroke();
+          } else {
+            ctx.fill();
+            ctx.fillStyle = LCD;
+            ctx.fillRect(cx - h * .55, cy - h * .1, h * .35, h * .35);
+            ctx.fillRect(cx + h * .2, cy - h * .1, h * .35, h * .35);
+          }
+        });
+      }
+    };
+    return g;
+  }
+
+  /* ---------- Pingouin partagé par les jeux 3, 4 et 5 (tête vers +x) ---------- */
+  function penguinSprite(x, y, rot, s) {
+    ctx.save(); ctx.translate(x, y); ctx.rotate(rot); ctx.scale(s, s);
+    ctx.fillStyle = PIX;
+    ctx.beginPath(); ctx.ellipse(0, 0, 13, 8, 0, 0, 7); ctx.fill();                 // corps
+    ctx.beginPath(); ctx.moveTo(13, -1.5); ctx.lineTo(19, 0.5); ctx.lineTo(13, 2.5); ctx.fill(); // bec
+    ctx.fillRect(-16, 2, 5, 3); ctx.fillRect(-16, -1, 5, 2);                          // pattes
+    ctx.beginPath(); ctx.ellipse(-1, -7, 7, 2.5, -0.3, 0, 7); ctx.fill();             // aileron
+    ctx.fillStyle = LCD;
+    ctx.beginPath(); ctx.ellipse(1, 3.5, 9.5, 3.8, 0, 0, 7); ctx.fill();              // ventre
+    ctx.fillRect(7.5, -4, 2.5, 2.5);                                                    // œil
+    ctx.restore();
+  }
+
+  /* ---------- Jeu 4 : Cible (lancer dans le mur de glace) ---------- */
+  function Target() {
+    const CX = W / 2, CY = W * 0.42;
+    const RINGS = [{r: 26, p: 10}, {r: 54, p: 8}, {r: 82, p: 6}, {r: 110, p: 4}, {r: 138, p: 2}];
+    const SHOTS = 10;
+    let thrown, aimT, wind, fly, marks, phase, waitT, last;
+    function aim() {
+      return {
+        x: CX + Math.sin(aimT * 0.045) * 125 + Math.sin(aimT * 0.11) * 22,
+        y: CY + Math.sin(aimT * 0.06 + 1) * 95 + Math.cos(aimT * 0.13) * 18
+      };
+    }
+    function next() {
+      phase = 'aim'; fly = null;
+      aimT = Math.random() * 300;
+      wind = Math.round((Math.random() * 2 - 1) * (1 + thrown * 0.3) * 10) / 10;
+    }
+    const g = {
+      key: 'cible-best', title: 'CIBLE', endTitle: 'TERMINÉ',
+      intro: 'Le viseur bouge tout seul. Touche pour lancer le pingouin. Attention au vent ! 10 lancers.',
+      score: 0,
+      reset() { g.score = 0; thrown = 0; marks = []; last = null; next(); },
+      interval() { return 16; },
+      action() {
+        if (phase !== 'aim') return;
+        const a = aim();
+        fly = {tx: a.x + wind * 26, ty: a.y + (Math.random() - 0.5) * 8, t: 0};
+        phase = 'fly'; buzz(15);
+      },
+      turn() { g.action(); },
+      step() {
+        if (phase === 'aim') aimT += 1 + thrown * 0.15;
+        else if (phase === 'fly') {
+          fly.t += 0.03;
+          if (fly.t >= 1) {
+            const d = Math.hypot(fly.tx - CX, fly.ty - CY);
+            const ring = RINGS.find(r => d <= r.r);
+            const pts = ring ? ring.p : 0;
+            g.score += pts; thrown++; last = {x: fly.tx, y: fly.ty, pts};
+            marks.push({x: fly.tx, y: fly.ty});
+            buzz(pts >= 8 ? [30, 40, 30] : 15);
+            phase = 'wait'; waitT = 55;
+          }
+        } else if (phase === 'wait') {
+          if (--waitT <= 0) { if (thrown >= SHOTS) return 'done'; next(); }
+        }
+      },
+      status() { return 'SCORE ' + pad3(g.score) + ' TIR ' + Math.min(thrown + 1, SHOTS) + '/' + SHOTS; },
+      draw() {
+        ctx.clearRect(0, 0, W, W);
+        // mur de blocs de glace
+        ctx.fillStyle = FAINT;
+        for (let row = 0; row * 36 < W; row++) {
+          const off = row % 2 ? 0 : 35;
+          for (let x = -off; x < W; x += 70) ctx.fillRect(x + 2, row * 36 + 2, 66, 32);
+        }
+        // anneaux
+        ctx.strokeStyle = PIX; ctx.fillStyle = PIX; ctx.lineWidth = 3;
+        RINGS.slice().reverse().forEach((r, i) => {
+          ctx.beginPath(); ctx.arc(CX, CY, r.r, 0, 7);
+          if (i === RINGS.length - 1) ctx.fill(); else ctx.stroke();
+        });
+        ctx.font = '20px VT323, monospace'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+        ctx.fillStyle = LCD; ctx.fillText('10', CX, CY);
+        ctx.fillStyle = PIX;
+        RINGS.slice(1).forEach(r => ctx.fillText(r.p, CX + r.r - 14, CY));
+        // pingouins plantés
+        marks.forEach(m => penguinSprite(m.x, m.y, -Math.PI / 2, 0.55));
+        // vent
+        ctx.textAlign = 'left'; ctx.textBaseline = 'top';
+        const arrows = Math.min(4, Math.ceil(Math.abs(wind)));
+        const wtxt = wind === 0 ? 'VENT 0' : 'VENT ' + (wind < 0 ? '◀'.repeat(arrows) : '▶'.repeat(arrows));
+        ctx.fillText(wtxt, 8, W - 30);
+        // viseur
+        if (phase === 'aim') {
+          const a = aim();
+          ctx.lineWidth = 2;
+          ctx.beginPath(); ctx.arc(a.x, a.y, 14, 0, 7); ctx.stroke();
+          ctx.fillRect(a.x - 22, a.y - 1, 12, 2); ctx.fillRect(a.x + 10, a.y - 1, 12, 2);
+          ctx.fillRect(a.x - 1, a.y - 22, 2, 12); ctx.fillRect(a.x - 1, a.y + 10, 2, 12);
+        }
+        // vol : part du bas de l'écran et rapetisse en s'éloignant
+        if (phase === 'fly') {
+          const t = fly.t;
+          const x = CX + (fly.tx - CX) * t;
+          const y = (W + 30) + (fly.ty - W - 30) * t - Math.sin(Math.PI * t) * 90;
+          penguinSprite(x, y, -Math.PI / 2 + Math.sin(t * 12) * 0.4, 1.8 - t * 1.25);
+        }
+        if (phase === 'wait' && last) {
+          ctx.font = '40px VT323, monospace'; ctx.textAlign = 'center';
+          ctx.fillText(last.pts ? '+' + last.pts : 'RATÉ', CX, W - 44);
+        }
+        ctx.textAlign = 'left';
+      }
+    };
+    return g;
+  }
+
+  /* ---------- Jeu 5 : Planeur ---------- */
+  function Glider() {
+    const PX = 95, SEA = W - 34;
+    let y, vy, dist, speed, birds, fish, bergs, t, caught, flying;
+    const g = {
+      key: 'planeur-best', title: 'PLANEUR',
+      intro: 'Touche pour prendre de la hauteur. Attrape les poissons, évite les mouettes, les icebergs et la mer.',
+      score: 0,
+      reset() {
+        y = W * 0.4; vy = 0; dist = 0; speed = 2.6; t = 0; caught = 0; flying = false;
+        birds = []; fish = []; bergs = []; g.score = 0;
+      },
+      interval() { return 16; },
+      action() { flying = true; vy = -5.2; buzz(6); },
+      turn() { g.action(); },
+      step() {
+        t++;
+        if (!flying) { y = W * 0.4 + Math.sin(t * 0.08) * 6; return; }
+        vy = Math.min(7, vy + 0.28); y += vy;
+        if (y < 16) { y = 16; vy = 0; }
+        speed = Math.min(6, 2.6 + t * 0.0009);
+        dist += speed;
+        const every = n => t % Math.max(20, Math.round(n)) === 0;
+        if (every(95 - t / 60)) birds.push({x: W + 20, y: 40 + Math.random() * (SEA - 170), v: 0.6 + Math.random() * 1.6, ph: Math.random() * 6});
+        if (every(65)) fish.push({x: W + 20, y: 40 + Math.random() * (SEA - 110)});
+        if (every(170)) bergs.push({x: W + 20, w: 60 + Math.random() * 50, h: 40 + Math.random() * 70});
+        birds.forEach(b => { b.x -= speed + b.v; b.ph += 0.15; });
+        fish.forEach(f => f.x -= speed);
+        bergs.forEach(b => b.x -= speed);
+        birds = birds.filter(b => b.x > -40); fish = fish.filter(f => f.x > -30); bergs = bergs.filter(b => b.x + b.w > -10);
+        fish = fish.filter(f => {
+          if (Math.hypot(f.x - PX, f.y - y) < 22) { caught++; buzz(12); return false; }
+          return true;
+        });
+        g.score = Math.floor(dist / 12) + caught * 10;
+        if (birds.some(b => Math.abs(b.x - PX) < 18 && Math.abs(b.y + Math.sin(b.ph) * 4 - y) < 14)) return 'over';
+        if (bergs.some(b => PX + 12 > b.x && PX - 12 < b.x + b.w && y + 9 > SEA - b.h)) return 'over';
+        if (y + 9 > SEA) return 'over';
+      },
+      status() { return 'SCORE ' + pad3(g.score) + ' POISSONS ' + caught; },
+      draw() {
+        ctx.clearRect(0, 0, W, W);
+        // nuages lointains
+        ctx.fillStyle = FAINT;
+        const off = (dist * 0.3) % 240;
+        for (let i = 0; i < 3; i++) {
+          const cx = i * 240 - off + 60, cy = 60 + (i % 2) * 70;
+          ctx.fillRect(cx, cy, 90, 16); ctx.fillRect(cx + 20, cy - 12, 50, 14);
+        }
+        // mer
+        ctx.fillRect(0, SEA, W, W - SEA);
+        ctx.fillStyle = PIX;
+        for (let x = -((dist * 0.8) % 24); x < W; x += 24) { ctx.fillRect(x, SEA, 12, 3); ctx.fillRect(x + 12, SEA + 3, 12, 3); }
+        // icebergs
+        bergs.forEach(b => {
+          ctx.beginPath();
+          ctx.moveTo(b.x, SEA);
+          ctx.lineTo(b.x + b.w * 0.2, SEA - b.h * 0.7);
+          ctx.lineTo(b.x + b.w * 0.45, SEA - b.h);
+          ctx.lineTo(b.x + b.w * 0.7, SEA - b.h * 0.6);
+          ctx.lineTo(b.x + b.w, SEA);
+          ctx.fill();
+          ctx.fillStyle = LCD;
+          ctx.fillRect(b.x + b.w * 0.35, SEA - b.h * 0.75, 4, b.h * 0.4);
+          ctx.fillStyle = PIX;
+        });
+        // poissons
+        fish.forEach(f => {
+          ctx.beginPath(); ctx.ellipse(f.x, f.y, 10, 5, 0, 0, 7); ctx.fill();
+          ctx.beginPath(); ctx.moveTo(f.x + 8, f.y); ctx.lineTo(f.x + 16, f.y - 6); ctx.lineTo(f.x + 16, f.y + 6); ctx.fill();
+          ctx.fillStyle = LCD; ctx.fillRect(f.x - 6, f.y - 2, 2, 2); ctx.fillStyle = PIX;
+        });
+        // mouettes
+        ctx.strokeStyle = PIX; ctx.lineWidth = 3; ctx.lineCap = 'round';
+        birds.forEach(b => {
+          const by = b.y + Math.sin(b.ph) * 4, flap = Math.sin(b.ph * 2) * 7;
+          ctx.beginPath();
+          ctx.moveTo(b.x - 15, by - flap); ctx.quadraticCurveTo(b.x - 7, by - 9, b.x, by);
+          ctx.quadraticCurveTo(b.x + 7, by - 9, b.x + 15, by - flap);
+          ctx.stroke();
+        });
+        ctx.lineCap = 'butt';
+        // planeur + pingouin
+        const rot = Math.max(-0.5, Math.min(0.6, vy * 0.07));
+        ctx.lineWidth = 1.5;
+        ctx.beginPath(); ctx.moveTo(PX - 6, y - 22); ctx.lineTo(PX - 4, y - 4); ctx.moveTo(PX + 6, y - 22); ctx.lineTo(PX + 4, y - 4); ctx.stroke();
+        ctx.beginPath(); ctx.moveTo(PX - 30, y - 20); ctx.lineTo(PX + 22, y - 28); ctx.lineTo(PX + 30, y - 20); ctx.closePath(); ctx.fill();
+        penguinSprite(PX, y, rot, 1);
+        if (!flying) {
+          ctx.font = '24px VT323, monospace'; ctx.textAlign = 'center'; ctx.textBaseline = 'top';
+          ctx.fillText('TOUCHE POUR DÉCOLLER', W / 2, W * 0.4 + 40);
+          ctx.textAlign = 'left';
+        }
+      }
+    };
+    return g;
+  }
+
+  /* ---------- Jeu 6 : Casse-briques ---------- */
+  const input = {hx: 0};             // direction maintenue (croix ou flèches)
+  function Bricks() {
+    const COLS = 8, ROWS = 6, TOP = 40, GAP = 4;
+    const BW = (W - 16 - GAP * (COLS - 1)) / COLS, BH = 16;
+    const PY = W - 28, PH = 10, R = 6;
+    let pw, px, ball, bricks, lives, level, held, left;
+    function layout() {
+      bricks = []; left = 0;
+      for (let r = 0; r < ROWS; r++) for (let c = 0; c < COLS; c++) {
+        let on = true;
+        if (level % 3 === 2) on = Math.abs(c - 3.5) <= r + 0.5;            // pyramide
+        else if (level % 3 === 0) on = (r + c) % 2 === 0 || r === 0;       // damier
+        if (!on) continue;
+        const hp = r < (level > 3 ? 3 : 2) ? 2 : 1;
+        bricks.push({x: 8 + c * (BW + GAP), y: TOP + r * (BH + GAP), hp});
+        left++;
+      }
+    }
+    function serve() {
+      held = true;
+      ball = {x: px, y: PY - R - 1, vx: 0, vy: 0};
+    }
+    const g = {
+      key: 'briques-best', title: 'BRIQUES',
+      intro: 'Déplace la barre en glissant le doigt ou avec la croix. Touche pour lancer la balle. Les briques à cœur clair demandent deux coups.',
+      score: 0,
+      reset() { g.score = 0; lives = 3; level = 1; pw = 74; px = W / 2; layout(); serve(); },
+      interval() { return 16; },
+      action() {
+        if (!held) return;
+        held = false;
+        const sp = 4.4 + level * 0.4, a = -Math.PI / 2 + (Math.random() - 0.5) * 0.8;
+        ball.vx = Math.cos(a) * sp; ball.vy = Math.sin(a) * sp;
+      },
+      drag(x) { px = Math.max(pw / 2, Math.min(W - pw / 2, x)); },
+      turn(x, y) { if (y === -1) g.action(); },
+      step() {
+        if (input.hx) g.drag(px + input.hx * 7);
+        if (held) { ball.x = px; ball.y = PY - R - 1; return; }
+        const n = Math.ceil(Math.hypot(ball.vx, ball.vy) / 3);
+        for (let i = 0; i < n; i++) {
+          ball.x += ball.vx / n; ball.y += ball.vy / n;
+          if (ball.x < R) { ball.x = R; ball.vx = Math.abs(ball.vx); }
+          if (ball.x > W - R) { ball.x = W - R; ball.vx = -Math.abs(ball.vx); }
+          if (ball.y < R) { ball.y = R; ball.vy = Math.abs(ball.vy); }
+          // barre
+          if (ball.vy > 0 && ball.y + R >= PY && ball.y + R <= PY + PH + 6 && Math.abs(ball.x - px) <= pw / 2 + R) {
+            const sp = Math.hypot(ball.vx, ball.vy);
+            const hit = Math.max(-1, Math.min(1, (ball.x - px) / (pw / 2)));
+            const a = -Math.PI / 2 + hit * 1.05;
+            ball.vx = Math.cos(a) * sp; ball.vy = Math.sin(a) * sp;
+            ball.y = PY - R; buzz(5);
+          }
+          // briques
+          for (const b of bricks) {
+            if (b.hp <= 0) continue;
+            const cx = Math.max(b.x, Math.min(ball.x, b.x + BW)), cy = Math.max(b.y, Math.min(ball.y, b.y + BH));
+            if ((ball.x - cx) ** 2 + (ball.y - cy) ** 2 > R * R) continue;
+            const ox = Math.min(ball.x + R - b.x, b.x + BW - (ball.x - R));
+            const oy = Math.min(ball.y + R - b.y, b.y + BH - (ball.y - R));
+            if (ox < oy) ball.vx = -ball.vx; else ball.vy = -ball.vy;
+            b.hp--;
+            if (b.hp === 0) { left--; g.score += 10; } else g.score += 2;
+            buzz(8);
+            break;
+          }
+          if (ball.y > W + R) {
+            lives--; buzz([80, 50, 80]);
+            if (lives <= 0) return 'over';
+            serve(); return 'hit';
+          }
+        }
+        if (left === 0) {
+          level++; g.score += 50; pw = Math.max(54, pw - 4);
+          layout(); serve(); buzz([30, 40, 30]);
+          return 'level';
+        }
+      },
+      status() { return 'SCORE ' + pad3(g.score) + ' VIES ' + lives; },
+      draw() {
+        ctx.clearRect(0, 0, W, W);
+        ctx.fillStyle = FAINT;
+        for (let r = 0; r < ROWS; r++) for (let c = 0; c < COLS; c++)
+          ctx.fillRect(8 + c * (BW + GAP), TOP + r * (BH + GAP), BW, BH);
+        ctx.fillStyle = PIX;
+        ctx.font = '20px VT323, monospace'; ctx.textBaseline = 'top';
+        ctx.fillText('NIVEAU ' + level, 8, 12);
+        bricks.forEach(b => {
+          if (b.hp <= 0) return;
+          ctx.fillStyle = PIX; ctx.fillRect(b.x, b.y, BW, BH);
+          if (b.hp > 1) { ctx.fillStyle = LCD; ctx.fillRect(b.x + 5, b.y + 5, BW - 10, BH - 10); }
+        });
+        ctx.fillStyle = PIX;
+        if (ctx.roundRect) { ctx.beginPath(); ctx.roundRect(px - pw / 2, PY, pw, PH, 5); ctx.fill(); }
+        else ctx.fillRect(px - pw / 2, PY, pw, PH);
+        ctx.fillRect(ball.x - R, ball.y - R + 2, R * 2, R * 2 - 4);
+        ctx.fillRect(ball.x - R + 2, ball.y - R, R * 2 - 4, R * 2);
+        if (held) {
+          ctx.font = '24px VT323, monospace'; ctx.textAlign = 'center';
+          ctx.fillText('TOUCHE POUR LANCER', W / 2, W * 0.62);
+          ctx.textAlign = 'left';
+        }
+      }
+    };
+    return g;
+  }
+
+  /* ---------- Jeu 7 : Glaçons (blocs qui tombent) ---------- */
+  function Ice() {
+    const COLS = 12, ROWS = 14, C = W / ROWS, BX = 0;      // plateau 12 × 14, panneau à droite
+    const SHAPES = [
+      [[0, 0], [1, 0]],                                    // domino
+      [[0, 0], [1, 0], [2, 0]],                            // barre de 3
+      [[0, 0], [0, 1], [1, 1]],                            // coin
+      [[1, 0], [0, 1], [1, 1], [2, 1], [1, 2]],            // croix
+      [[0, 0], [2, 0], [0, 1], [1, 1], [2, 1]],            // U
+      [[0, 0], [1, 0], [1, 1], [1, 2], [2, 2]],            // escalier
+      [[0, 0], [0, 1], [0, 2], [1, 2], [2, 2]]             // grand coin
+    ];
+    let grid, cur, next, fallT, lines, level, rep;
+    const norm = cells => {
+      const mx = Math.min(...cells.map(c => c[0])), my = Math.min(...cells.map(c => c[1]));
+      return cells.map(([x, y]) => [x - mx, y - my]);
+    };
+    const randShape = () => norm(SHAPES[Math.floor(Math.random() * SHAPES.length)]);
+    function fits(cells, ox, oy) {
+      return cells.every(([x, y]) => {
+        const gx = ox + x, gy = oy + y;
+        return gx >= 0 && gx < COLS && gy < ROWS && (gy < 0 || !grid[gy][gx]);
+      });
+    }
+    function spawn() {
+      const cells = next || randShape();
+      next = randShape();
+      const w = Math.max(...cells.map(c => c[0])) + 1;
+      cur = {cells, x: Math.floor((COLS - w) / 2), y: 0};
+      return fits(cur.cells, cur.x, cur.y);
+    }
+    function lock() {
+      cur.cells.forEach(([x, y]) => { if (cur.y + y >= 0) grid[cur.y + y][cur.x + x] = 1; });
+      let n = 0;
+      for (let r = ROWS - 1; r >= 0; r--) {
+        if (grid[r].every(v => v)) { grid.splice(r, 1); grid.unshift(Array(COLS).fill(0)); n++; r++; }
+      }
+      if (n) {
+        lines += n; g.score += [0, 10, 30, 60, 100, 150][n] * level;
+        level = 1 + Math.floor(lines / 8); buzz(n > 1 ? [30, 30, 30] : 20);
+      } else buzz(6);
+      return spawn() ? null : 'over';
+    }
+    function down() {
+      if (fits(cur.cells, cur.x, cur.y + 1)) { cur.y++; return null; }
+      return lock();
+    }
+    function block(px, py, s) {
+      ctx.fillStyle = PIX; ctx.fillRect(px + 1, py + 1, s - 2, s - 2);
+      ctx.fillStyle = LCD; ctx.fillRect(px + s * 0.3, py + s * 0.3, s * 0.4, s * 0.4);
+    }
+    let pending = null;
+    const g = {
+      key: 'glacons-best', title: 'GLAÇONS', swipe: true,
+      intro: 'Remplis des lignes entières pour les faire fondre. Glisse pour déplacer, touche pour tourner, glisse vers le bas pour descendre.',
+      score: 0,
+      reset() {
+        grid = Array.from({length: ROWS}, () => Array(COLS).fill(0));
+        g.score = 0; lines = 0; level = 1; fallT = 0; rep = 0; next = null; pending = null; spawn();
+      },
+      interval() { return 16; },
+      action() {             // tourner, avec petits décalages contre les murs
+        const rot = norm(cur.cells.map(([x, y]) => [-y, x]));
+        for (const k of [0, -1, 1, -2, 2]) {
+          if (fits(rot, cur.x + k, cur.y)) { cur.cells = rot; cur.x += k; return; }
+        }
+      },
+      turn(x, y) {
+        if (x && fits(cur.cells, cur.x + x, cur.y)) cur.x += x;
+        if (y === -1) g.action();
+        if (y === 1) { pending = down() || pending; fallT = 0; }
+      },
+      step() {
+        if (pending) return pending;
+        if (input.pad && input.hx) {
+          rep++;
+          if (rep > 10 && rep % 4 === 0 && fits(cur.cells, cur.x + input.hx, cur.y)) cur.x += input.hx;
+        } else rep = 0;
+        const soft = input.pad && input.hy === 1;
+        fallT++;
+        if (fallT >= (soft ? 3 : Math.max(6, 42 - level * 4))) { fallT = 0; return down() || undefined; }
+      },
+      status() { return 'SCORE ' + pad3(g.score) + ' NIV ' + level; },
+      draw() {
+        ctx.clearRect(0, 0, W, W);
+        // puits
+        ctx.fillStyle = FAINT;
+        for (let r = 0; r < ROWS; r++) for (let c = 0; c < COLS; c++) ctx.fillRect(BX + c * C + 1, r * C + 1, C - 2, C - 2);
+        for (let r = 0; r < ROWS; r++) for (let c = 0; c < COLS; c++) if (grid[r][c]) block(BX + c * C, r * C, C);
+        cur.cells.forEach(([x, y]) => { if (cur.y + y >= 0) block(BX + (cur.x + x) * C, (cur.y + y) * C, C); });
+        // panneau
+        const PX = COLS * C;
+        ctx.fillStyle = PIX; ctx.fillRect(PX + 2, 0, 2, W);
+        ctx.font = '20px VT323, monospace'; ctx.textBaseline = 'top'; ctx.textAlign = 'center';
+        const mid = PX + (W - PX) / 2 + 2;
+        ctx.fillText('SUIV.', mid, 8);
+        const s = 12, w = Math.max(...next.map(c => c[0])) + 1;
+        next.forEach(([x, y]) => block(mid - w * s / 2 + x * s, 34 + y * s, s));
+        ctx.fillStyle = PIX;
+        ctx.fillText('LIGNES', mid, 110); ctx.fillText(String(lines), mid, 130);
+        ctx.fillText('NIV', mid, 170); ctx.fillText(String(level), mid, 190);
+        ctx.textAlign = 'left';
+      }
+    };
+    return g;
+  }
+
+  /* ---------- Jeu 8 : Mémoire ---------- */
+  function Memory() {
+    const N = 4, GAP = 8, S = (W - 12 - GAP * (N - 1)) / N, O = 6;
+    let cards, open, moves, pairs, lockT, flash;
+    function sym(k, x, y, s) {
+      ctx.fillStyle = PIX; ctx.strokeStyle = PIX; ctx.lineWidth = s * 0.08; ctx.lineCap = 'round';
+      const r = s * 0.28;
+      if (k === 0) penguinSprite(x, y, -Math.PI / 2, s / 34);
+      else if (k === 1) {                                     // poisson
+        ctx.beginPath(); ctx.ellipse(x - r * 0.2, y, r, r * 0.55, 0, 0, 7); ctx.fill();
+        ctx.beginPath(); ctx.moveTo(x + r * 0.6, y); ctx.lineTo(x + r * 1.2, y - r * 0.6); ctx.lineTo(x + r * 1.2, y + r * 0.6); ctx.fill();
+        ctx.fillStyle = LCD; ctx.beginPath(); ctx.arc(x - r * 0.75, y - r * 0.12, s * 0.035, 0, 7); ctx.fill();
+      } else if (k === 2) {                                   // flocon
+        ctx.beginPath();
+        for (let i = 0; i < 3; i++) {
+          const a = i * Math.PI / 3;
+          ctx.moveTo(x - Math.cos(a) * r, y - Math.sin(a) * r); ctx.lineTo(x + Math.cos(a) * r, y + Math.sin(a) * r);
+        }
+        ctx.stroke();
+      } else if (k === 3) {                                   // étoile
+        ctx.beginPath();
+        for (let i = 0; i < 10; i++) {
+          const a = -Math.PI / 2 + i * Math.PI / 5, rr = i % 2 ? r * 0.45 : r;
+          ctx.lineTo(x + Math.cos(a) * rr, y + Math.sin(a) * rr);
+        }
+        ctx.fill();
+      } else if (k === 4) {                                   // cœur
+        ctx.beginPath();
+        ctx.arc(x - r * 0.45, y - r * 0.2, r * 0.5, Math.PI, 0);
+        ctx.arc(x + r * 0.45, y - r * 0.2, r * 0.5, Math.PI, 0);
+        ctx.lineTo(x, y + r * 0.85); ctx.closePath(); ctx.fill();
+      } else if (k === 5) {                                   // lune
+        ctx.beginPath(); ctx.arc(x, y, r, 0, 7); ctx.fill();
+        ctx.fillStyle = flash; ctx.beginPath(); ctx.arc(x + r * 0.45, y - r * 0.3, r * 0.85, 0, 7); ctx.fill();
+      } else if (k === 6) {                                   // igloo
+        ctx.beginPath(); ctx.arc(x, y + r * 0.5, r, Math.PI, 0); ctx.closePath(); ctx.fill();
+        ctx.fillStyle = flash; ctx.beginPath(); ctx.arc(x, y + r * 0.5, r * 0.35, Math.PI, 0); ctx.closePath(); ctx.fill();
+      } else {                                                // losange
+        ctx.beginPath(); ctx.moveTo(x, y - r); ctx.lineTo(x + r * 0.7, y); ctx.lineTo(x, y + r); ctx.lineTo(x - r * 0.7, y); ctx.fill();
+      }
+      ctx.lineCap = 'butt';
+    }
+    const g = {
+      key: 'memoire-best', title: 'MÉMOIRE', endTitle: 'BRAVO',
+      intro: 'Retourne les cartes deux par deux et retrouve les 8 paires en un minimum de coups.',
+      score: 0,
+      reset() {
+        const deck = [0, 1, 2, 3, 4, 5, 6, 7, 0, 1, 2, 3, 4, 5, 6, 7];
+        for (let i = deck.length - 1; i > 0; i--) { const j = Math.floor(Math.random() * (i + 1)); [deck[i], deck[j]] = [deck[j], deck[i]]; }
+        cards = deck.map(k => ({k, up: false, done: false}));
+        open = []; moves = 0; pairs = 0; lockT = 0; g.score = 0;
+      },
+      interval() { return 16; },
+      tap(x, y) {
+        if (lockT > 0) return;
+        const c = Math.floor((x - O) / (S + GAP)), r = Math.floor((y - O) / (S + GAP));
+        if (c < 0 || r < 0 || c >= N || r >= N) return;
+        const card = cards[r * N + c];
+        if (card.up || card.done) return;
+        card.up = true; open.push(card); buzz(5);
+        if (open.length === 2) {
+          moves++;
+          if (open[0].k === open[1].k) {
+            open.forEach(o => o.done = true); open = []; pairs++; buzz([20, 30, 20]);
+          } else lockT = 45;
+        }
+      },
+      turn() {},
+      step() {
+        if (lockT > 0 && --lockT === 0) { open.forEach(o => o.up = false); open = []; }
+        if (pairs === 8 && lockT === 0) {
+          if (!g.score) g.score = Math.max(10, 260 - (moves - 8) * 12);
+          return 'done';
+        }
+      },
+      status() { return 'COUPS ' + moves + ' PAIRES ' + pairs + '/8'; },
+      draw() {
+        ctx.clearRect(0, 0, W, W);
+        cards.forEach((card, i) => {
+          const x = O + (i % N) * (S + GAP), y = O + Math.floor(i / N) * (S + GAP);
+          if (card.up || card.done) {
+            ctx.fillStyle = PIX; ctx.fillRect(x, y, S, S);
+            ctx.fillStyle = LCD; ctx.fillRect(x + 3, y + 3, S - 6, S - 6);
+            ctx.globalAlpha = card.done ? 0.45 : 1;
+            flash = LCD;
+            sym(card.k, x + S / 2, y + S / 2, S);
+            ctx.globalAlpha = 1;
+          } else {
+            ctx.fillStyle = PIX; ctx.fillRect(x, y, S, S);
+            ctx.fillStyle = LCD;
+            for (let a = 0; a < 3; a++) for (let b = 0; b < 3; b++) {
+              const cx = x + S * (0.25 + a * 0.25), cy = y + S * (0.25 + b * 0.25);
+              ctx.beginPath(); ctx.moveTo(cx, cy - 5); ctx.lineTo(cx + 5, cy); ctx.lineTo(cx, cy + 5); ctx.lineTo(cx - 5, cy); ctx.fill();
+            }
+          }
+        });
+      }
+    };
+    return g;
+  }
+
+  /* ---------- Jeu 9 : Sudoku ---------- */
+  function Sudoku() {
+    const C = 40, BX = (W - 9 * C) / 2, BY = 4, BAR = BY + 9 * C + 10, BH = W - BAR - 4, KW = W / 10;
+    const CLUES = 36;
+    let sol, grid, given, sel, mistakes, frames, wrong, pending;
+    const ok = (b, i, n) => {
+      const r = Math.floor(i / 9), c = i % 9, br = r - r % 3, bc = c - c % 3;
+      for (let k = 0; k < 9; k++) {
+        if (b[r * 9 + k] === n || b[k * 9 + c] === n) return false;
+        if (b[(br + Math.floor(k / 3)) * 9 + bc + k % 3] === n) return false;
+      }
+      return true;
+    };
+    const shuffled = a => { for (let i = a.length - 1; i > 0; i--) { const j = Math.floor(Math.random() * (i + 1)); [a[i], a[j]] = [a[j], a[i]]; } return a; };
+    function fill(b) {
+      const i = b.indexOf(0);
+      if (i < 0) return true;
+      for (const n of shuffled([1, 2, 3, 4, 5, 6, 7, 8, 9])) {
+        if (ok(b, i, n)) { b[i] = n; if (fill(b)) return true; b[i] = 0; }
+      }
+      return false;
+    }
+    function count(b, limit) {
+      let idx = -1, best = 10, cands = null;
+      for (let i = 0; i < 81; i++) {
+        if (b[i]) continue;
+        const cs = [];
+        for (let n = 1; n <= 9; n++) if (ok(b, i, n)) cs.push(n);
+        if (!cs.length) return 0;
+        if (cs.length < best) { best = cs.length; idx = i; cands = cs; }
+      }
+      if (idx < 0) return 1;
+      let total = 0;
+      for (const n of cands) { b[idx] = n; total += count(b, limit - total); if (total >= limit) break; }
+      b[idx] = 0;
+      return total;
+    }
+    function make() {
+      const b = Array(81).fill(0); fill(b); sol = b.slice();
+      const p = sol.slice(); let clues = 81;
+      for (const i of shuffled([...Array(81).keys()])) {
+        if (clues <= CLUES) break;
+        const save = p[i]; p[i] = 0;
+        if (count(p.slice(), 2) !== 1) p[i] = save; else clues--;
+      }
+      grid = p; given = p.map(v => v > 0);
+    }
+    function place(n) {
+      if (sel < 0 || given[sel]) return;
+      if (n === 0) { grid[sel] = 0; return; }
+      if (grid[sel] === n) return;
+      if (n === sol[sel]) {
+        grid[sel] = n; buzz(6);
+        if (grid.every((v, i) => v === sol[i])) {
+          g.score = Math.max(20, 600 - Math.floor(frames * 0.016) - mistakes * 60);
+          pending = 'done';
+        }
+      } else {
+        mistakes++; wrong = {i: sel, n, t: 40}; buzz([40, 30, 40]);
+        if (mistakes >= 3) pending = 'over';
+      }
+    }
+    const g = {
+      key: 'sudoku-best', title: 'SUDOKU', endTitle: 'BRAVO',
+      intro: 'Touche une case, puis un chiffre en bas. Chaque ligne, colonne et carré contient 1 à 9. 3 erreurs maximum.',
+      score: 0,
+      reset() { make(); sel = -1; mistakes = 0; frames = 0; wrong = null; pending = null; g.score = 0; },
+      interval() { return 16; },
+      tap(x, y) {
+        if (y >= BAR && y <= BAR + BH) { const k = Math.floor(x / KW); place(k === 9 ? 0 : k + 1); return; }
+        const c = Math.floor((x - BX) / C), r = Math.floor((y - BY) / C);
+        if (c >= 0 && r >= 0 && c < 9 && r < 9) sel = r * 9 + c;
+      },
+      digit(n) { place(n); },
+      turn(x, y) {
+        if (sel < 0) { sel = 40; return; }
+        const r = Math.min(8, Math.max(0, Math.floor(sel / 9) + y)), c = Math.min(8, Math.max(0, sel % 9 + x));
+        sel = r * 9 + c;
+      },
+      step() {
+        frames++;
+        if (wrong && --wrong.t <= 0) wrong = null;
+        if (pending) return pending;
+      },
+      status() {
+        const s = Math.floor(frames * 0.016);
+        return 'ERREURS ' + mistakes + '/3 ' + Math.floor(s / 60) + ':' + String(s % 60).padStart(2, '0');
+      },
+      draw() {
+        ctx.clearRect(0, 0, W, W);
+        const sr = sel >= 0 ? Math.floor(sel / 9) : -1, sc = sel >= 0 ? sel % 9 : -1;
+        const sv = sel >= 0 ? grid[sel] : 0;
+        ctx.font = '32px VT323, monospace'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+        for (let i = 0; i < 81; i++) {
+          const r = Math.floor(i / 9), c = i % 9, x = BX + c * C, y = BY + r * C;
+          const isSel = i === sel;
+          const zone = r === sr || c === sc || (Math.floor(r / 3) === Math.floor(sr / 3) && Math.floor(c / 3) === Math.floor(sc / 3));
+          const same = sv && grid[i] === sv;
+          if (isSel) { ctx.fillStyle = PIX; ctx.fillRect(x, y, C, C); }
+          else if (same) { ctx.fillStyle = 'rgba(38,51,31,.28)'; ctx.fillRect(x, y, C, C); }
+          else if (zone) { ctx.fillStyle = FAINT; ctx.fillRect(x, y, C, C); }
+          let v = grid[i], bad = false;
+          if (wrong && wrong.i === i && wrong.t % 10 < 6) { v = wrong.n; bad = true; }
+          if (v) {
+            ctx.fillStyle = isSel ? LCD : PIX;
+            ctx.fillText(String(v), x + C / 2, y + C / 2 + 1);
+            if (!given[i] && !bad) ctx.fillRect(x + C / 2 - 6, y + C - 7, 12, 2);   // trait sous tes chiffres
+            if (bad) { ctx.fillRect(x + 8, y + C / 2, C - 16, 2); }
+          }
+        }
+        ctx.fillStyle = PIX;
+        for (let k = 0; k <= 9; k++) {
+          const t = k % 3 === 0 ? 3 : 1;
+          ctx.fillRect(BX + k * C - t / 2, BY, t, 9 * C);
+          ctx.fillRect(BX, BY + k * C - t / 2, 9 * C, t);
+        }
+        // pavé de chiffres
+        for (let k = 0; k < 10; k++) {
+          const x = k * KW;
+          const n = k + 1;
+          const full = k < 9 && grid.filter(v => v === n).length === 9;
+          ctx.fillStyle = FAINT; ctx.fillRect(x + 2, BAR, KW - 4, BH);
+          ctx.fillStyle = PIX; ctx.globalAlpha = full ? 0.25 : 1;
+          ctx.fillText(k < 9 ? String(n) : '✕', x + KW / 2, BAR + BH / 2 + 1);
+          ctx.globalAlpha = 1;
+        }
+        ctx.textAlign = 'left'; ctx.textBaseline = 'top';
+      }
+    };
+    return g;
+  }
+
+  /* ---------- Jeu 10 : Morpion ---------- */
+  function TicTac() {
+    const C = 116, BX = (W - 3 * C) / 2, BY = 14;
+    const LINES = [[0, 1, 2], [3, 4, 5], [6, 7, 8], [0, 3, 6], [1, 4, 7], [2, 5, 8], [0, 4, 8], [2, 4, 6]];
+    let b, turnOf, round, wins, draws, waitT, result, winLine;
+    function winner(bd) {
+      for (const l of LINES) if (bd[l[0]] && bd[l[0]] === bd[l[1]] && bd[l[1]] === bd[l[2]]) return {w: bd[l[0]], l};
+      return bd.every(v => v) ? {w: '=', l: null} : null;
+    }
+    function mm(bd, who) {
+      const r = winner(bd);
+      if (r) return r.w === 'O' ? 1 : r.w === 'X' ? -1 : 0;
+      let best = who === 'O' ? -2 : 2;
+      for (let i = 0; i < 9; i++) if (!bd[i]) {
+        bd[i] = who; const v = mm(bd, who === 'O' ? 'X' : 'O'); bd[i] = null;
+        best = who === 'O' ? Math.max(best, v) : Math.min(best, v);
+      }
+      return best;
+    }
+    function aiMove() {
+      const free = [...Array(9).keys()].filter(i => !b[i]);
+      if (Math.random() < 0.22) return free[Math.floor(Math.random() * free.length)];
+      let best = -2, picks = [];
+      free.forEach(i => { b[i] = 'O'; const v = mm(b, 'X'); b[i] = null; if (v > best) { best = v; picks = [i]; } else if (v === best) picks.push(i); });
+      return picks[Math.floor(Math.random() * picks.length)];
+    }
+    function newRound() {
+      b = Array(9).fill(null); result = null; winLine = null; waitT = 0;
+      turnOf = round % 2 === 0 ? 'X' : 'O';
+      if (turnOf === 'O') waitT = 35;
+    }
+    function check() {
+      const r = winner(b);
+      if (!r) return false;
+      result = r.w; winLine = r.l;
+      if (r.w === 'X') { wins++; g.score += 3; buzz([20, 30, 20]); }
+      else if (r.w === '=') { draws++; g.score += 1; buzz(15); }
+      else buzz([80, 50, 80]);
+      waitT = 80;
+      return true;
+    }
+    const g = {
+      key: 'morpion-best', title: 'MORPION',
+      intro: 'Aligne 3 croix avant la console. Victoire : 3 points, match nul : 1 point. La série s’arrête à la première défaite.',
+      score: 0,
+      reset() { g.score = 0; wins = 0; draws = 0; round = 0; newRound(); },
+      interval() { return 16; },
+      tap(x, y) {
+        if (result || turnOf !== 'X') return;
+        const c = Math.floor((x - BX) / C), r = Math.floor((y - BY) / C);
+        if (c < 0 || r < 0 || c > 2 || r > 2) return;
+        const i = r * 3 + c;
+        if (b[i]) return;
+        b[i] = 'X'; buzz(5);
+        if (!check()) { turnOf = 'O'; waitT = 30; }
+      },
+      turn() {},
+      step() {
+        if (result) {
+          if (--waitT <= 0) {
+            if (result === 'O') return 'over';
+            round++; newRound();
+          }
+          return;
+        }
+        if (turnOf === 'O' && --waitT <= 0) {
+          b[aiMove()] = 'O';
+          if (!check()) turnOf = 'X';
+        }
+      },
+      status() { return 'VICTOIRES ' + wins + ' NULS ' + draws; },
+      draw() {
+        ctx.clearRect(0, 0, W, W);
+        ctx.fillStyle = PIX;
+        for (let k = 1; k < 3; k++) {
+          ctx.fillRect(BX + k * C - 2, BY + 6, 4, 3 * C - 12);
+          ctx.fillRect(BX + 6, BY + k * C - 2, 3 * C - 12, 4);
+        }
+        ctx.strokeStyle = PIX; ctx.lineWidth = 9; ctx.lineCap = 'round';
+        b.forEach((v, i) => {
+          const cx = BX + (i % 3) * C + C / 2, cy = BY + Math.floor(i / 3) * C + C / 2, r = C * 0.28;
+          ctx.beginPath();
+          if (v === 'X') { ctx.moveTo(cx - r, cy - r); ctx.lineTo(cx + r, cy + r); ctx.moveTo(cx + r, cy - r); ctx.lineTo(cx - r, cy + r); }
+          else if (v === 'O') ctx.arc(cx, cy, r, 0, 7);
+          ctx.stroke();
+        });
+        if (winLine) {
+          const p = i => [BX + (i % 3) * C + C / 2, BY + Math.floor(i / 3) * C + C / 2];
+          const [x1, y1] = p(winLine[0]), [x2, y2] = p(winLine[2]);
+          ctx.lineWidth = 4; ctx.beginPath(); ctx.moveTo(x1, y1); ctx.lineTo(x2, y2); ctx.stroke();
+        }
+        ctx.lineCap = 'butt';
+        ctx.font = '26px VT323, monospace'; ctx.textAlign = 'center'; ctx.textBaseline = 'top';
+        const msg = result === 'X' ? 'GAGNÉ ! +3' : result === 'O' ? 'LA CONSOLE GAGNE' : result === '=' ? 'MATCH NUL +1'
+          : turnOf === 'X' ? 'À TOI (X)' : 'LA CONSOLE RÉFLÉCHIT…';
+        ctx.fillText(msg, W / 2, BY + 3 * C + 12);
+        ctx.textAlign = 'left';
+      }
+    };
+    return g;
+  }
+
+  /* ---------- Jeu 11 : Sauvetage (façon jeu LCD à segments) ---------- */
+  function Rescue() {
+    const LANES = [84, 210, 336], STEPS = 5;
+    const stepY = k => 64 + k * 56;
+    const stepX = (l, k) => LANES[l] + (k % 2 ? -16 : 16);
+    const NETY = W - 66;
+    let lane, birds, misses, tick, splash, saved, savedT, frame;
+    const g = {
+      key: 'sauvetage-best', title: 'SAUVETAGE',
+      intro: 'Les pingouins glissent de l’iceberg. Déplace le filet pour les rattraper avant qu’ils tombent à l’eau. 3 ratés et c’est fini.',
+      score: 0,
+      reset() { lane = 1; birds = []; misses = 0; tick = 0; splash = []; savedT = 0; frame = 0; g.score = 0; },
+      interval() { return 16; },
+      tap(x) { g.turn(x < W / 2 ? -1 : 1, 0); },
+      turn(x) { if (x) { lane = Math.max(0, Math.min(2, lane + x)); buzz(4); } },
+      step() {
+        frame++;
+        if (savedT > 0) savedT--;
+        splash = splash.filter(s => --s.t > 0);
+        const every = Math.max(13, 38 - Math.floor(g.score / 4));
+        if (frame % every) return;
+        tick++;
+        // chaque pingouin descend d'une case
+        for (const b of birds) b.k++;
+        for (const b of birds.filter(b => b.k >= STEPS)) {
+          if (b.l === lane) { g.score++; savedT = 10; buzz(10); if (g.score % 50 === 0 && misses > 0) misses--; }
+          else { misses++; splash.push({l: b.l, t: 40}); buzz([60, 40, 60]); }
+        }
+        birds = birds.filter(b => b.k < STEPS);
+        if (misses >= 3) return 'over';
+        // nouveaux pingouins, de plus en plus nombreux
+        const chance = Math.min(0.75, 0.35 + g.score / 120);
+        if (Math.random() < chance) {
+          const l = Math.floor(Math.random() * 3);
+          if (!birds.some(b => b.l === l && b.k < 2)) birds.push({l, k: 0});
+        }
+      },
+      status() { return 'SCORE ' + pad3(g.score) + ' RATÉS ' + misses + '/3'; },
+      draw() {
+        ctx.clearRect(0, 0, W, W);
+        // iceberg en haut
+        ctx.fillStyle = PIX;
+        ctx.beginPath();
+        ctx.moveTo(0, 40); ctx.lineTo(60, 14); ctx.lineTo(120, 30); ctx.lineTo(200, 6); ctx.lineTo(290, 28);
+        ctx.lineTo(360, 12); ctx.lineTo(W, 36); ctx.lineTo(W, 44); ctx.lineTo(0, 44); ctx.fill();
+        // toboggans de glace
+        ctx.strokeStyle = FAINT; ctx.lineWidth = 3;
+        for (let l = 0; l < 3; l++) {
+          ctx.beginPath(); ctx.moveTo(stepX(l, 0), 44);
+          for (let k = 0; k < STEPS; k++) ctx.lineTo(stepX(l, k), stepY(k) + 14);
+          ctx.stroke();
+        }
+        // cases de pingouins : éteintes en fond, allumées quand occupées
+        for (let l = 0; l < 3; l++) for (let k = 0; k < STEPS; k++) {
+          const lit = birds.some(b => b.l === l && b.k === k);
+          ctx.globalAlpha = lit ? 1 : 0.1;
+          penguinSprite(stepX(l, k), stepY(k), Math.PI / 2 + (k % 2 ? 0.5 : -0.5), 1.15);
+        }
+        ctx.globalAlpha = 1;
+        // eau
+        ctx.fillStyle = FAINT; ctx.fillRect(0, W - 22, W, 22);
+        ctx.fillStyle = PIX;
+        for (let x = 0; x < W; x += 24) { ctx.fillRect(x, W - 22, 12, 3); ctx.fillRect(x + 12, W - 19, 12, 3); }
+        // plouf
+        ctx.font = '26px VT323, monospace'; ctx.textAlign = 'center'; ctx.textBaseline = 'top';
+        for (let l = 0; l < 3; l++) {
+          const on = splash.some(s => s.l === l) && frame % 10 < 7;
+          ctx.globalAlpha = on ? 1 : 0.1;
+          ctx.fillText('PLOUF', LANES[l], W - 50);
+        }
+        // filet : 3 positions, une seule allumée
+        for (let l = 0; l < 3; l++) {
+          ctx.globalAlpha = l === lane ? 1 : 0.1;
+          const x = LANES[l];
+          ctx.strokeStyle = PIX; ctx.lineWidth = 3;
+          ctx.beginPath(); ctx.moveTo(x - 38, NETY - 26); ctx.lineTo(x - 30, NETY); ctx.lineTo(x + 30, NETY); ctx.lineTo(x + 38, NETY - 26); ctx.stroke();
+          ctx.lineWidth = 1.5;
+          for (let i = -24; i <= 24; i += 12) { ctx.beginPath(); ctx.moveTo(x + i * 1.2, NETY - 24); ctx.lineTo(x + i, NETY); ctx.stroke(); }
+          ctx.beginPath(); ctx.moveTo(x - 36, NETY - 16); ctx.lineTo(x + 36, NETY - 16); ctx.stroke();
+          if (l === lane && savedT > 0) { ctx.globalAlpha = 1; ctx.fillText('+1', x + (l === 2 ? -58 : 58), NETY - 26); }
+        }
+        ctx.globalAlpha = 1; ctx.textAlign = 'left';
+      }
+    };
+    return g;
+  }
+
+  /* ---------- Jeu 12 : Chat perché (plateformes sur les toits) ---------- */
+  function Cat() {
+    const T = 30, ROWS = 14, L = 150;
+    const GRAV = 0.55, JUMP = -11, RUN = 3.8;
+    let grid, fish, dogs, goalX, cat, camX, lives, level, inv, buffer, coyote, checkpoint, caughtFish, won, seed;
+    function rng() {
+      seed = seed + 0x6D2B79F5 | 0;
+      let r = Math.imul(seed ^ seed >>> 15, 1 | seed);
+      r = r + Math.imul(r ^ r >>> 7, 61 | r) ^ r;
+      return ((r ^ r >>> 14) >>> 0) / 4294967296;
+    }
+    const solid = (c, r) => r >= 0 && r < ROWS && c >= 0 && c < L && grid[r][c] === 1;
+    function build() {
+      seed = level * 7919 + 17;
+      grid = Array.from({length: ROWS}, () => Array(L).fill(0));
+      fish = []; dogs = [];
+      const ground = c => { grid[12][c] = 1; grid[13][c] = 1; };
+      let c = 0, run = 0;
+      for (; c < 10; c++) ground(c);
+      run = 10;
+      while (c < L - 12) {
+        if (run >= 5 && rng() < 0.16 + level * 0.02) {          // trou entre deux toits
+          const w = 2 + Math.floor(rng() * (level > 2 ? 3 : 2));
+          for (let k = 0; k < w; k++) fish.push({x: (c + k) * T + T / 2, y: 10 * T + T / 2 - Math.sin((k + 0.5) / w * Math.PI) * 40, got: false});
+          if (w >= 4) { const m = c + Math.floor(w / 2); grid[11][m] = grid[12][m] = grid[13][m] = 1; }   // cheminée pour se poser
+          c += w; run = 0; continue;
+        }
+        ground(c);
+        if (rng() < 0.08 && run > 2) {                             // caisses
+          grid[11][c] = 1; if (rng() < 0.4) grid[10][c] = 1;
+        }
+        if (rng() < 0.07 && c + 5 < L - 12) {                      // corniche en hauteur avec poissons
+          const len = 3 + Math.floor(rng() * 3), row = 9;
+          for (let k = 0; k < len; k++) { grid[row][c + k] = 1; fish.push({x: (c + k) * T + T / 2, y: (row - 1) * T + T / 2, got: false}); }
+        } else if (rng() < 0.12) fish.push({x: c * T + T / 2, y: 11 * T + T / 2 - (grid[11][c] ? T * (grid[10][c] ? 2 : 1) : 0), got: false});
+        c++; run++;
+      }
+      for (; c < L; c++) ground(c);
+      // pas de corniche juste au-dessus d'un bord de toit : on s'y cognerait la tête en sautant
+      for (let k = 0; k < L; k++) {
+        // pas de caisse collée à un trou non plus
+        if (grid[11][k] && grid[12][k] && !(grid[12][k - 1] === 0 && grid[12][k + 1] === 0)) {
+          let nearGap = false;
+          for (let j = k - 2; j <= k + 3; j++) if (j >= 0 && j < L && !grid[12][j]) nearGap = true;
+          if (nearGap) { grid[11][k] = 0; grid[10][k] = 0; }
+        }
+        if (!grid[9][k]) continue;
+        let near = false;
+        for (let j = k - 2; j <= k + 2; j++) if (j >= 0 && j < L && !grid[12][j]) near = true;
+        if (near) { grid[9][k] = 0; fish.forEach(f => { if (Math.floor(f.x / T) === k && f.y < 9 * T) f.y = 11 * T + T / 2; }); }
+      }
+      // chiens qui patrouillent sur les toits assez longs
+      let start = null;
+      for (let k = 12; k <= L - 12; k++) {
+        const ok = grid[12][k] && !grid[11][k];
+        if (ok && start === null) start = k;
+        if ((!ok || k === L - 12) && start !== null) {
+          if (k - start >= 5 && rng() < 0.5 + level * 0.08) {
+            dogs.push({x: (start + 1) * T, min: start * T, max: k * T - 34, dir: rng() < 0.5 ? -1 : 1, flee: 0, gone: false});
+          }
+          start = null;
+        }
+      }
+      goalX = (L - 5) * T;
+      // point de reprise au milieu, sur un toit libre
+      let m = Math.floor(L / 2);
+      while (m > 10 && !(grid[12][m] && grid[12][m + 1] && !grid[11][m] && !grid[11][m + 1])) m--;
+      midX = m * T;
+    }
+    let midX = 0;
+    function respawn() {
+      cat = {x: checkpoint, y: 10 * T, vx: 0, vy: 0, w: 22, h: 20, face: 1, ground: false, anim: 0};
+      inv = 70; buffer = 0; coyote = 0;
+    }
+    function hurt() {
+      if (inv > 0) return null;
+      lives--; buzz([80, 50, 80]);
+      if (lives <= 0) return 'over';
+      respawn();
+      return 'hit';
+    }
+    function moveX(dx) {
+      cat.x += dx;
+      const top = Math.floor(cat.y / T), bot = Math.floor((cat.y + cat.h - 1) / T);
+      const col = dx > 0 ? Math.floor((cat.x + cat.w) / T) : Math.floor(cat.x / T);
+      for (let r = top; r <= bot; r++) if (solid(col, r)) {
+        // juste un peu trop bas sur le bord : le chat se hisse dessus au lieu de tomber
+        if (r === bot && cat.vy > 0 && !cat.ground && cat.y + cat.h - r * T < 31 && !solid(col, r - 1)) { cat.y = r * T - cat.h; cat.vy = Math.min(cat.vy, 0); break; }
+        cat.x = dx > 0 ? col * T - cat.w - 0.01 : (col + 1) * T + 0.01; cat.vx = 0; break;
+      }
+      if (cat.x < 0) cat.x = 0;
+    }
+    function moveY(dy) {
+      cat.y += dy; cat.ground = false;
+      const left = Math.floor(cat.x / T), right = Math.floor((cat.x + cat.w - 1) / T);
+      const row = dy > 0 ? Math.floor((cat.y + cat.h) / T) : Math.floor(cat.y / T);
+      for (let c = left; c <= right; c++) if (solid(c, row)) {
+        if (dy > 0) { cat.y = row * T - cat.h; cat.ground = true; } else cat.y = (row + 1) * T;
+        cat.vy = 0; break;
+      }
+    }
+    const g = {
+      key: 'chat-best', title: 'CHAT PERCHÉ',
+      intro: 'Avance avec ◀ ▶, saute en touchant l’écran ou avec ▲. Attrape les poissons, saute sur les chiens pour les faire fuir et rentre à la chatière.',
+      score: 0,
+      reset() { g.score = 0; lives = 3; level = 1; caughtFish = 0; won = 0; checkpoint = 2 * T; build(); camX = 0; respawn(); },
+      interval() { return 16; },
+      action() { buffer = 8; },
+      turn(x, y) { if (y === -1) g.action(); },
+      step() {
+        if (won > 0) {                                           // petite pause à l'arrivée
+          if (--won === 0) { level++; checkpoint = 2 * T; build(); camX = 0; respawn(); return 'level'; }
+          return;
+        }
+        if (inv > 0) inv--;
+        // course
+        const want = input.hx * RUN;
+        cat.vx += (want - cat.vx) * (cat.ground ? 0.35 : 0.2);
+        if (input.hx) cat.face = input.hx;
+        // saut (avec un peu de tolérance au bord des toits)
+        coyote = cat.ground ? 6 : Math.max(0, coyote - 1);
+        if (buffer > 0) buffer--;
+        if (buffer > 0 && coyote > 0) { cat.vy = JUMP; buffer = 0; coyote = 0; buzz(5); }
+        cat.vy = Math.min(12, cat.vy + GRAV);
+        moveX(cat.vx); moveY(cat.vy);
+        cat.anim += Math.abs(cat.vx) * 0.12;
+        if (cat.x > midX && checkpoint < midX) checkpoint = midX;
+        // chute dans la rue
+        if (cat.y > ROWS * T + 40) return hurt();
+        // poissons
+        for (const f of fish) if (!f.got && Math.abs(f.x - (cat.x + cat.w / 2)) < 20 && Math.abs(f.y - (cat.y + cat.h / 2)) < 20) {
+          f.got = true; caughtFish++; g.score += 10; buzz(8);
+        }
+        // chiens
+        for (const d of dogs) {
+          if (d.gone) continue;
+          if (d.flee) { d.x += d.dir * 7; if (--d.flee <= 0) d.gone = true; continue; }
+          d.x += d.dir * (0.9 + level * 0.2);
+          if (d.x < d.min || d.x > d.max) { d.dir *= -1; d.x = Math.max(d.min, Math.min(d.max, d.x)); }
+          const dy = 12 * T - 22;
+          if (cat.x + cat.w > d.x + 4 && cat.x < d.x + 30 && cat.y + cat.h > dy && cat.y < dy + 22) {
+            if (cat.vy > 0 && cat.y + cat.h - dy < 14) {
+              d.flee = 30; d.dir = cat.x + cat.w / 2 < d.x + 17 ? 1 : -1;
+              cat.vy = -8; g.score += 20; buzz([10, 20, 10]);
+            } else { const r = hurt(); if (r) return r; }
+          }
+        }
+        // arrivée
+        if (cat.x + cat.w > goalX + 10 && cat.x < goalX + 40) { g.score += 100 + lives * 20; won = 70; buzz([30, 40, 30, 40, 60]); }
+        camX = Math.max(0, Math.min(L * T - W, cat.x - W * 0.4));
+      },
+      status() { return 'SCORE ' + pad3(g.score) + ' VIES ' + lives + ' N' + level; },
+      draw() {
+        ctx.clearRect(0, 0, W, W);
+        // ville au loin et lune
+        ctx.fillStyle = FAINT;
+        ctx.beginPath(); ctx.arc(W - 70, 60, 26, 0, 7); ctx.fill();
+        const off = (camX * 0.3) % 200;
+        for (let i = -1; i < 4; i++) {
+          const bx = i * 200 - off;
+          ctx.fillRect(bx + 10, 190, 50, 170); ctx.fillRect(bx + 70, 230, 40, 130); ctx.fillRect(bx + 120, 160, 60, 200);
+        }
+        // toits, caisses, corniches
+        const c0 = Math.floor(camX / T), c1 = c0 + Math.ceil(W / T) + 1;
+        for (let r = 0; r < ROWS; r++) for (let c = c0; c <= c1; c++) {
+          if (!solid(c, r)) continue;
+          const x = c * T - camX, y = r * T;
+          ctx.fillStyle = PIX; ctx.fillRect(x, y, T, T);
+          ctx.fillStyle = LCD;
+          if (r >= 12) { if (r === 12) { ctx.fillRect(x, y + 6, T, 2); ctx.fillRect(x + (c % 2 ? 4 : 18), y + 12, 8, 2); } }  // tuiles
+          else if (r >= 10) { ctx.fillRect(x + 3, y + 3, T - 6, 2); ctx.fillRect(x + 3, y + T - 5, T - 6, 2); ctx.fillRect(x + T / 2 - 1, y + 3, 2, T - 6); }  // caisse
+          else ctx.fillRect(x, y + T - 6, T, 2);               // corniche
+        }
+        ctx.fillStyle = PIX;
+        // poissons
+        fish.forEach(f => {
+          if (f.got) return;
+          const x = f.x - camX, y = f.y;
+          if (x < -20 || x > W + 20) return;
+          ctx.beginPath(); ctx.ellipse(x - 3, y, 9, 4.5, 0, 0, 7); ctx.fill();
+          ctx.beginPath(); ctx.moveTo(x + 4, y); ctx.lineTo(x + 11, y - 5); ctx.lineTo(x + 11, y + 5); ctx.fill();
+          ctx.fillStyle = LCD; ctx.fillRect(x - 8, y - 2, 2, 2); ctx.fillStyle = PIX;
+        });
+        // chiens
+        dogs.forEach(d => {
+          if (d.gone) return;
+          const x = d.x - camX, y = 12 * T - 22, f = d.dir;
+          if (x < -40 || x > W + 40) return;
+          ctx.fillStyle = PIX;
+          ctx.fillRect(x + 4, y + 6, 24, 10);                                  // corps
+          const hx = f > 0 ? x + 24 : x - 4;
+          ctx.fillRect(hx, y, 12, 10);                                         // tête
+          ctx.fillRect(f > 0 ? hx + 10 : hx - 4, y + 4, 6, 5);                 // museau
+          ctx.fillRect(f > 0 ? hx + 1 : hx + 8, y + 2, 3, 9);                  // oreille
+          const step = Math.floor(d.x / 6) % 2;
+          ctx.fillRect(x + 6, y + 16, 4, 6 - step * 2); ctx.fillRect(x + 22, y + 16, 4, 4 + step * 2);
+          ctx.fillRect(f > 0 ? x : x + 28, y + 4, 4, 3);                       // queue
+          ctx.fillStyle = LCD; ctx.fillRect(f > 0 ? hx + 7 : hx + 3, y + 3, 2, 2);
+          if (d.flee) { ctx.fillStyle = PIX; ctx.font = '18px VT323, monospace'; ctx.textBaseline = 'top'; ctx.fillText('OUAF?!', x - 4, y - 22); }
+        });
+        // arrivée : la chatière et son bol de lait
+        const gx = goalX - camX;
+        ctx.fillStyle = PIX;
+        ctx.fillRect(gx, 12 * T - 80, 50, 80);
+        ctx.fillStyle = LCD; ctx.fillRect(gx + 6, 12 * T - 74, 38, 30);
+        ctx.fillStyle = PIX; ctx.fillRect(gx + 24, 12 * T - 74, 2, 30); ctx.fillRect(gx + 6, 12 * T - 60, 38, 2);
+        ctx.fillStyle = LCD; ctx.beginPath(); ctx.arc(gx + 25, 12 * T - 10, 12, Math.PI, 0); ctx.fill();   // chatière
+        ctx.fillStyle = PIX; ctx.fillRect(gx - 22, 12 * T - 8, 18, 8); ctx.fillStyle = LCD; ctx.fillRect(gx - 20, 12 * T - 7, 14, 2);  // bol
+        // chat
+        if (!(inv > 0 && Math.floor(inv / 5) % 2)) {
+          const x = cat.x - camX, y = cat.y, f = cat.face;
+          ctx.save(); ctx.translate(x + cat.w / 2, y + cat.h); ctx.scale(f, 1);
+          ctx.fillStyle = PIX; ctx.strokeStyle = PIX; ctx.lineWidth = 3; ctx.lineCap = 'round';
+          ctx.beginPath(); ctx.ellipse(-1, -9, 11, 6.5, 0, 0, 7); ctx.fill();               // corps
+          ctx.beginPath(); ctx.arc(10, -15, 6.5, 0, 7); ctx.fill();                          // tête
+          ctx.beginPath(); ctx.moveTo(5, -19); ctx.lineTo(6, -26); ctx.lineTo(10, -21); ctx.fill();   // oreilles
+          ctx.beginPath(); ctx.moveTo(11, -21); ctx.lineTo(15, -27); ctx.lineTo(16, -18); ctx.fill();
+          ctx.beginPath(); ctx.moveTo(-11, -11); ctx.quadraticCurveTo(-20, -14, -18, -26); ctx.stroke();   // queue levée
+          const s = cat.ground ? Math.sin(cat.anim) * 4 : 3;
+          ctx.lineWidth = 3;
+          ctx.beginPath(); ctx.moveTo(-6, -5); ctx.lineTo(-6 - s, 0); ctx.moveTo(5, -5); ctx.lineTo(5 + s, 0); ctx.stroke();  // pattes
+          ctx.fillStyle = LCD; ctx.fillRect(12, -17, 2, 2);                                   // œil
+          ctx.lineCap = 'butt';
+          ctx.restore();
+        }
+        if (won > 0) {
+          ctx.fillStyle = PIX; ctx.font = '34px VT323, monospace'; ctx.textAlign = 'center'; ctx.textBaseline = 'top';
+          ctx.fillText('MIAOU ! NIVEAU ' + level + ' RÉUSSI', W / 2, 80);
+          ctx.textAlign = 'left';
+        }
+      }
+    };
+    return g;
+  }
+
+  /* ---------- Jeu 3 : Pingouin (lancer) ---------- */
+  function Penguin() {
+    const S = 7;                 // pixels par mètre
+    const BASE = W - 70;         // ligne du sol à l'écran
+    const G0 = 9.8, TS = 1.7;    // gravité, accélération du temps
+    let p, phase, angle, angDir, power, powDir, flaps, surf, ramps, snakes, birds, carry, camX, camY, seed, boing = 0;
+    function rng() {
+      seed = seed + 0x6D2B79F5 | 0;
+      let r = Math.imul(seed ^ seed >>> 15, 1 | seed);
+      r = r + Math.imul(r ^ r >>> 7, 61 | r) ^ r;
+      return ((r ^ r >>> 14) >>> 0) / 4294967296;
+    }
+    function build() {
+      surf = [{a: 0, b: 40, ice: false}];
+      let x = 40;
+      while (x < 20000) { const len = 20 + rng() * 50; surf.push({a: x, b: x + len, ice: rng() < 0.45}); x += len; }
+      ramps = []; x = 110 + rng() * 80;
+      while (x < 20000) { ramps.push(x); x += 140 + rng() * 200; }
+      snakes = []; x = 70 + rng() * 60;
+      while (x < 20000) {
+        if (!ramps.some(r => Math.abs(r - x) < 12)) snakes.push(x);
+        x += 45 + rng() * 110;
+      }
+      birds = []; x = 90 + rng() * 80;
+      while (x < 20000) { birds.push({x, y: 35 + rng() * 75, ph: rng() * 6, used: false}); x += 90 + rng() * 170; }
+    }
+    function iceAt(x) { for (const s of surf) if (x >= s.a && x < s.b) return s.ice; return false; }
+
+    const penguin = (x, y, rot) => penguinSprite(x, y, rot, 1);
+
+    const g = {
+      key: 'pingouin-best', title: 'PINGOUIN', endTitle: 'ARRIVÉE', unit: ' m',
+      intro: "Touche une fois pour l'angle, une fois pour la puissance. En vol, touche pour battre des ailes (2 fois). Les serpents enroulés te renvoient en l'air et les oiseaux t'emmènent plus loin !",
+      score: 0,
+      reset() {
+        seed = Math.floor(Math.random() * 1e9); build();
+        p = {x: 0, y: 1.6, vx: 0, vy: 0};
+        phase = 'aim'; angle = 45; angDir = 1; power = 0; powDir = 1; flaps = 2;
+        camX = 0; camY = 0; g.score = 0; g.prevBest = bests[g.key] || 0; carry = null; boing = 0;
+      },
+      interval() { return 16; },
+      action() {
+        if (phase === 'aim') phase = 'power';
+        else if (phase === 'power') {
+          const v = 22 + power * 48, a = angle * Math.PI / 180;
+          p.vx = v * Math.cos(a); p.vy = v * Math.sin(a); phase = 'fly'; buzz(20);
+        } else if (phase === 'fly' && !carry && flaps > 0 && p.y > 0.5) {
+          flaps--; p.vy = Math.max(p.vy, 0) + 11; p.vx += 3; buzz(12);
+        }
+      },
+      turn() { g.action(); },
+      step() {
+        const dt = 0.016 * TS;
+        birds.forEach(b => {
+          b.ph += 0.25;
+          if (b.used && (!carry || carry.bird !== b)) { b.x += 30 * dt; b.y += 0.06; }  // repart au loin
+        });
+        if (phase === 'aim') { angle += angDir * 1.4; if (angle > 78 || angle < 12) angDir *= -1; }
+        else if (phase === 'power') {
+          power += powDir * 0.022;
+          if (power > 1) { power = 1; powDir = -1; }
+          if (power < 0) { power = 0; powDir = 1; }
+        } else if (phase === 'fly' && carry) {
+          // un oiseau transporte le pingouin, puis le lâche plus loin
+          const b = carry.bird;
+          b.x += 38 * dt; b.y += 0.1 + Math.sin(b.ph * 0.5) * 0.08;   // monte un peu en volant
+          p.x = b.x - 1.6; p.y = b.y - 5.1; p.vx = 38; p.vy = 0;
+          carry.left -= 38 * dt;
+          g.score = Math.floor(p.x);
+          if (carry.left <= 0) { p.vy = 10; p.vx = 34; carry = null; buzz(15); }
+        } else if (phase === 'fly') {
+          const grab = p.y > 3 && birds.find(b => !b.used && Math.abs(b.x - p.x) < 5 && Math.abs(b.y - 1 - p.y) < 5);
+          if (grab) {
+            grab.used = true;
+            carry = {bird: grab, left: 80 + Math.random() * 70};
+            buzz([10, 20, 10]);
+            return;
+          }
+          p.vy -= G0 * dt; p.x += p.vx * dt; p.y += p.vy * dt;
+          if (boing > 0) boing--;
+          if (p.y <= 0 && p.vx > 1 && snakes.some(s => p.x >= s - 1 && p.x < s + 3)) {
+            // serpent enroulé : il se détend et renvoie le pingouin en l'air
+            p.y = 0.2;
+            p.vy = Math.max(25, Math.abs(p.vy) * 1.1);
+            p.vx = Math.max(p.vx * 1.25, 20);
+            boing = 25; buzz([15, 20, 25]);
+          } else if (p.y <= 0) {
+            p.y = 0;
+            const ice = iceAt(p.x);
+            if (p.vy < -5) { p.vy = -p.vy * (ice ? 0.55 : 0.42); p.vx *= ice ? 0.97 : 0.88; buzz(8); }
+            else {
+              p.vy = 0;
+              if (p.vx > 6 && ramps.some(r => p.x >= r && p.x < r + 5)) { p.vy = p.vx * 0.55; p.y = 0.1; buzz(15); }
+              else p.vx = Math.max(0, p.vx - (ice ? 0.9 : 3.5) * dt);   // glisse longtemps sur le ventre
+            }
+          }
+          g.score = Math.floor(p.x);
+          if (p.y === 0 && p.vx <= 0.05) return 'done';
+        }
+        camX = Math.max(0, p.x * S - W * 0.35);
+        camY = Math.max(0, 80 - (BASE - p.y * S));
+      },
+      status() { return 'DIST ' + pad3(g.score) + 'M AILES ' + flaps; },
+      draw() {
+        ctx.clearRect(0, 0, W, W);
+        const gy = BASE + camY;
+        // montagnes lointaines
+        ctx.fillStyle = FAINT;
+        const off = (camX * 0.25) % 210;
+        for (let i = -1; i < 4; i++) {
+          const mx = i * 210 - off;
+          ctx.beginPath(); ctx.moveTo(mx, gy); ctx.lineTo(mx + 105, gy - 150); ctx.lineTo(mx + 210, gy); ctx.fill();
+        }
+        // sol : neige (points) ou glace (hachures)
+        for (const s of surf) {
+          const x1 = s.a * S - camX, x2 = s.b * S - camX;
+          if (x2 < 0 || x1 > W) continue;
+          ctx.fillStyle = FAINT; ctx.fillRect(x1, gy, x2 - x1, W - gy);
+          ctx.fillStyle = PIX;
+          if (s.ice) {
+            for (let x = Math.ceil(x1 / 9) * 9; x < x2 - 6; x += 9) ctx.fillRect(x, gy + 7, 6, 2);
+            for (let x = Math.ceil(x1 / 9) * 9 + 4; x < x2 - 6; x += 9) ctx.fillRect(x, gy + 15, 6, 2);
+          } else {
+            for (let x = Math.ceil(x1 / 12) * 12; x < x2; x += 12) {
+              ctx.fillRect(x, gy + 8, 2, 2); ctx.fillRect(x + 6, gy + 16, 2, 2);
+            }
+          }
+        }
+        ctx.fillStyle = PIX; ctx.fillRect(0, gy, W, 3);
+        // tremplins de neige
+        ramps.forEach(r => {
+          const x = r * S - camX;
+          if (x < -50 || x > W + 10) return;
+          ctx.beginPath(); ctx.moveTo(x, gy); ctx.lineTo(x + 5 * S, gy); ctx.lineTo(x + 5 * S, gy - 2.2 * S); ctx.fill();
+        });
+        // serpents enroulés (ressorts)
+        snakes.forEach(s => {
+          const x = s * S - camX + 1 * S;
+          if (x < -40 || x > W + 40) return;
+          const squash = boing > 15 && Math.abs(p.x - s) < 60 ? 1.5 : 1;  // il se détend
+          ctx.fillStyle = PIX;
+          [[13, 5], [10, 5], [7, 4.5]].forEach(([rx, ry], i) => {
+            ctx.beginPath(); ctx.ellipse(x, gy - 4 - i * 7 * squash, rx, ry, 0, 0, 7); ctx.fill();
+            ctx.fillStyle = LCD;
+            ctx.fillRect(x - rx + 3, gy - 5 - i * 7 * squash, rx * 2 - 6, 1.5);   // anneaux
+            ctx.fillStyle = PIX;
+          });
+          const hy = gy - 4 - 3 * 7 * squash;                                   // tête
+          ctx.beginPath(); ctx.ellipse(x + 3, hy, 6, 4.5, 0, 0, 7); ctx.fill();
+          ctx.fillRect(x + 8, hy + 1, 5, 1.5); ctx.fillRect(x + 12, hy - 0.5, 2, 1.5); ctx.fillRect(x + 12, hy + 2, 2, 1.5); // langue
+          ctx.fillStyle = LCD; ctx.fillRect(x + 4, hy - 2, 2, 2);
+          ctx.fillStyle = PIX;
+        });
+        // grands oiseaux
+        ctx.strokeStyle = PIX; ctx.lineCap = 'round';
+        birds.forEach(b => {
+          const x = b.x * S - camX, y = BASE - b.y * S + camY;
+          if (x < -40 || x > W + 40 || y < -40 || y > W + 20) return;
+          const flap = Math.sin(b.ph) * 10;
+          ctx.fillStyle = PIX;
+          ctx.beginPath(); ctx.ellipse(x, y, 11, 5, 0, 0, 7); ctx.fill();                       // corps
+          ctx.beginPath(); ctx.arc(x + 11, y - 3, 4.5, 0, 7); ctx.fill();                       // tête
+          ctx.beginPath(); ctx.moveTo(x + 15, y - 4); ctx.lineTo(x + 22, y - 2); ctx.lineTo(x + 15, y - 1); ctx.fill(); // bec
+          ctx.fillStyle = LCD; ctx.fillRect(x + 11, y - 5, 2, 2);
+          ctx.lineWidth = 4;
+          ctx.beginPath();
+          ctx.moveTo(x - 2, y - 2); ctx.quadraticCurveTo(x - 14, y - 14 - flap, x - 30, y - 6 - flap * 1.6);
+          ctx.moveTo(x + 2, y - 2); ctx.quadraticCurveTo(x - 4, y - 16 - flap, x + 4, y - 26 - flap * 1.4);
+          ctx.stroke();
+          if (carry && carry.bird === b) {                                                       // pattes qui tiennent
+            ctx.lineWidth = 2;
+            ctx.beginPath(); ctx.moveTo(x - 3, y + 4); ctx.lineTo(x - 3, y + 10); ctx.moveTo(x + 3, y + 4); ctx.lineTo(x + 3, y + 10); ctx.stroke();
+          }
+        });
+        ctx.lineCap = 'butt';
+        if (carry) {
+          ctx.font = '24px VT323, monospace'; ctx.textBaseline = 'top';
+          ctx.fillStyle = PIX;
+          ctx.fillText('EN TAXI AÉRIEN !', 10, 10 + 0);
+        }
+        if (boing > 0) {
+          ctx.font = '28px VT323, monospace'; ctx.textBaseline = 'top';
+          ctx.fillText('BOING !', p.x * S - camX - 10, BASE - p.y * S + camY - 60);
+        }
+        // bornes tous les 50 m
+        ctx.font = '20px VT323, monospace'; ctx.textBaseline = 'top';
+        for (let m = Math.floor(camX / S / 50) * 50; m * S - camX < W; m += 50) {
+          if (m === 0) continue;
+          const x = m * S - camX;
+          ctx.fillRect(x, gy - 12, 2, 12);
+          ctx.fillText(m + ' m', x + 4, gy + 24);
+        }
+        // record
+        const b = g.prevBest;
+        if (b > 0) {
+          const x = b * S - camX;
+          if (x > 0 && x < W) {
+            for (let y = gy - 70; y < gy; y += 8) ctx.fillRect(x, y, 2, 4);
+            ctx.fillText('RECORD', x + 4, gy - 70);
+          }
+        }
+        // catapulte
+        const cx = -camX;
+        ctx.fillRect(cx + 2, gy - 6, 26, 6);
+        ctx.fillRect(cx + 12, gy - 14, 6, 8);
+        // visée et jauge
+        const sx = p.x * S - camX, sy = BASE - p.y * S + camY;
+        if (phase === 'aim' || phase === 'power') {
+          const a = angle * Math.PI / 180;
+          for (let d = 22; d < 90; d += 10) ctx.fillRect(sx + Math.cos(a) * d - 2, sy - Math.sin(a) * d - 2, 4, 4);
+          if (phase === 'power') {
+            ctx.strokeStyle = PIX; ctx.lineWidth = 2;
+            ctx.strokeRect(W - 34, 40, 18, 170);
+            ctx.fillRect(W - 30, 44 + 162 * (1 - power), 10, 162 * power);
+            ctx.fillText('FORCE', W - 50, 216);
+          } else ctx.fillText(Math.round(angle) + '°', sx + 30, sy - 110);
+        }
+        let rot;
+        if (phase !== 'fly') rot = -Math.PI / 2;
+        else if (carry) rot = -Math.PI / 2 + Math.sin(carry.bird.ph * 0.5) * 0.15;
+        else if (p.y > 0.05) rot = -Math.atan2(p.vy, p.vx);
+        else rot = 0;
+        const lift = Math.abs(Math.sin(rot)) * 13 + Math.abs(Math.cos(rot)) * 8;
+        penguin(sx + 12, sy - (phase === 'fly' ? lift : 6), rot);
+      }
+    };
+    return g;
+  }
+
+  /* ---------- Moteur commun ---------- */
+  const games = {serpent: Snake(), souris: Mouse(), pingouin: Penguin(), cible: Target(), planeur: Glider(), briques: Bricks(), glacons: Ice(), memoire: Memory(), sudoku: Sudoku(), morpion: TicTac(), sauvetage: Rescue(), chat: Cat()};
+  const bests = {};
+  Object.values(games).forEach(g => bests[g.key] = parseInt(store.get(g.key, '0'), 10) || 0);
+  let current = store.get('console-jeu', 'serpent');
+  if (!games[current]) current = 'serpent';
+  let G = games[current];
+  let state = 'idle', last = 0, acc = 0;
+
+  const ov = $('overlay');
+  function show(title, text, cta) {
+    $('ovTitle').textContent = title; $('ovText').textContent = text; $('ovCta').textContent = cta;
+    ov.hidden = false;
+  }
+  let recordAtStart = 0;
+  function hud() {
+    if (G.score > bests[G.key]) { bests[G.key] = G.score; store.set(G.key, G.score); }
+    $('score').textContent = G.status();
+    $('best').textContent = 'RECORD ' + pad3(bests[G.key]) + (G.unit ? 'M' : '');
+  }
+
+  function loop(t) {
+    if (state !== 'run') return;
+    acc += t - last; last = t;
+    if (acc > 400) acc = 400;
+    while (acc >= G.interval() && state === 'run') {
+      acc -= G.interval();
+      const r = G.step();
+      hud();
+      if (r === 'over' || r === 'win' || r === 'done') { finish(r); break; }
+      if (r === 'hit' || r === 'level') { acc = -700; break; }
+    }
+    G.draw();
+    if (state === 'run') requestAnimationFrame(loop);
+  }
+  function start() {
+    if (state === 'pause') return resume();
+    recordAtStart = bests[G.key];
+    G.reset(); state = 'run'; ov.hidden = true; hud();
+    $('play').textContent = 'REJOUER'; $('pause').textContent = 'Pause';
+    last = performance.now(); acc = 0; requestAnimationFrame(loop);
+    wake();
+  }
+  function pause() {
+    if (state === 'run') {
+      state = 'pause'; $('pause').textContent = 'Reprendre';
+      show('PAUSE', 'Score actuel : ' + G.score, 'Touche REPRENDRE');
+    } else if (state === 'pause') resume();
+  }
+  function resume() {
+    state = 'run'; ov.hidden = true; $('pause').textContent = 'Pause';
+    last = performance.now(); acc = 0; requestAnimationFrame(loop);
+  }
+  function finish(r) {
+    state = 'over'; G.draw(); buzz([60, 40, 120]);
+    const u = G.unit || '';
+    const rec = G.score > recordAtStart;
+    const title = r === 'win' ? 'BRAVO' : r === 'done' ? G.endTitle : 'PERDU';
+    const label = G.unit ? 'Distance : ' : 'Score : ';
+    show(title, label + G.score + u + (rec ? ' · nouveau record !' : ' · Record : ' + bests[G.key] + u), 'Touche JOUER');
+  }
+  function select(name) {
+    current = name; G = games[name]; store.set('console-jeu', name);
+    document.querySelectorAll('.tab').forEach(b => b.setAttribute('aria-pressed', String(b.dataset.game === name)));
+    $('menuCurrent').textContent = document.querySelector('.tab[data-game="' + name + '"] b').textContent;
+    state = 'idle'; G.reset(); G.draw(); hud();
+    $('play').textContent = 'JOUER'; $('pause').textContent = 'Pause';
+    show(G.title, G.intro, 'Touche JOUER');
+  }
+  function turn(x, y) { if (state === 'run') G.turn(x, y); }
+
+  let lock = null;
+  async function wake() {
+    try { if (!lock && navigator.wakeLock) { lock = await navigator.wakeLock.request('screen'); lock.addEventListener('release', () => lock = null); } } catch (e) {}
+  }
+  document.addEventListener('visibilitychange', () => { if (document.hidden && state === 'run') pause(); });
+
+  const menuBtn = $('menuBtn'), menuList = $('menuList');
+  function menu(open) {
+    menuList.hidden = !open; menuBtn.setAttribute('aria-expanded', String(open));
+    if (open && state === 'run') pause();
+  }
+  menuBtn.addEventListener('click', e => { e.stopPropagation(); menu(menuList.hidden); });
+  document.addEventListener('click', e => { if (!menuList.hidden && !e.target.closest('.menu')) menu(false); });
+  document.querySelectorAll('.tab').forEach(b => b.addEventListener('click', () => {
+    menu(false);
+    if (b.dataset.game !== current) select(b.dataset.game);
+  }));
+  $('play').addEventListener('click', start);
+  $('pause').addEventListener('click', pause);
+  const dirs = {'b-up': [0, -1], 'b-down': [0, 1], 'b-left': [-1, 0], 'b-right': [1, 0]};
+  Object.entries(dirs).forEach(([id, [x, y]]) => {
+    const b = $(id);
+    b.addEventListener('pointerdown', e => { e.preventDefault(); input.hx = x; input.hy = y; input.pad = true; turn(x, y); });
+    ['pointerup', 'pointerleave', 'pointercancel'].forEach(ev => b.addEventListener(ev, () => {
+      if (input.hx === x && input.hy === y) { input.hx = 0; input.hy = 0; input.pad = false; }
+    }));
+  });
+  document.addEventListener('keyup', e => {
+    if ((e.key === 'ArrowLeft' || e.key === 'q') && input.hx === -1) input.hx = 0;
+    if ((e.key === 'ArrowRight' || e.key === 'd') && input.hx === 1) input.hx = 0;
+  });
+  function dragTo(e) {
+    if (state !== 'run' || !G.drag) return;
+    const r = cv.getBoundingClientRect();
+    G.drag((e.clientX - r.left) * W / r.width);
+  }
+  document.addEventListener('keydown', e => {
+    const map = {ArrowUp: [0, -1], ArrowDown: [0, 1], ArrowLeft: [-1, 0], ArrowRight: [1, 0], z: [0, -1], s: [0, 1], q: [-1, 0], d: [1, 0]};
+    if (G.digit && state === 'run' && /^[0-9]$/.test(e.key)) { G.digit(+e.key); return; }
+    if (G.digit && state === 'run' && (e.key === 'Backspace' || e.key === 'Delete')) { G.digit(0); return; }
+    if (map[e.key]) { e.preventDefault(); if (map[e.key][0]) input.hx = map[e.key][0]; turn(...map[e.key]); }
+    else if (e.key === ' ' || e.key === 'Enter') {
+      e.preventDefault();
+      if (state === 'run') G.action ? G.action() : pause(); else start();
+    }
+  });
+
+  let sx = 0, sy = 0, tracking = false, swiped = false;
+  const stage = document.querySelector('.stage');
+  stage.addEventListener('pointerdown', e => {
+    sx = e.clientX; sy = e.clientY; tracking = true; swiped = false;
+    dragTo(e);
+    if (state === 'run' && G.action && !G.swipe) { G.action(); tracking = false; }
+  });
+  stage.addEventListener('pointermove', e => {
+    dragTo(e);
+    if (!tracking) return;
+    const dx = e.clientX - sx, dy = e.clientY - sy;
+    if (Math.max(Math.abs(dx), Math.abs(dy)) < 22) return;
+    swiped = true;
+    if (!G.action || G.swipe) Math.abs(dx) > Math.abs(dy) ? turn(Math.sign(dx), 0) : turn(0, Math.sign(dy));
+    sx = e.clientX; sy = e.clientY;
+  });
+  stage.addEventListener('pointerup', e => {
+    if (tracking) {
+      if (state !== 'run') start();
+      else if (G.tap && !swiped) {
+        const r = cv.getBoundingClientRect();
+        G.tap((e.clientX - r.left) * W / r.width, (e.clientY - r.top) * W / r.height);
+      }
+      else if (G.action && !swiped) G.action();
+    }
+    tracking = false;
+  });
+  stage.addEventListener('pointercancel', () => tracking = false);
+  document.addEventListener('touchmove', e => { if (e.target.closest('.stage, .dpad')) e.preventDefault(); }, {passive: false});
+
+  select(current);
+})();
+</script>
+
+</body>
+</html>
